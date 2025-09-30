@@ -1,0 +1,13 @@
+services:
+  minio:
+    image: quay.io/minio/minio
+    container_name: minio
+    ports:
+      - "9000:9000"   # API S3
+      - "9090:9090"   # Consola Web
+    environment:
+      MINIO_ROOT_USER: admin
+      MINIO_ROOT_PASSWORD: admin123
+    volumes:
+      - ./data_MinIO:/data
+    command: server /data --console-address ":9090"
