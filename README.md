@@ -3,8 +3,8 @@ Multi-Modal Data Management process for MDS-ADSDB Course.
 
 # Cómo ejecutar
 1. Poner en marcha el cliente de MinIO a través de Docker: docker compose up -d
-2. Desde la carpeta raíz, ejecutar el manager de MinIO: python -m src.common.minio_manager.py
-3. Ejecutar los ingestions de la misma manera: python -m src.data_management.data_ingestion.{X}.py
+2. Desde la carpeta raíz, ejecutar el manager de MinIO: python -m src.common.minio_manager.py. De momento, esto crea la estructura de buckets de la landing zone.
+3. Ejecutar los ingestions de la misma manera: python -m src.data_management.data_ingestion.{X}.py. De momento, solo está la de texto (json).
 
 
 # Requisitos

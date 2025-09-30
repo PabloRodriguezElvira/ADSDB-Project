@@ -11,3 +11,6 @@ __pycache__/
 
 # Archivos de configuración locales
 *.env
+
+# Estructura de buckets de minIO
+data_MinIO/
