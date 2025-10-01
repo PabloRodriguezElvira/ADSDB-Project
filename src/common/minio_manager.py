@@ -7,8 +7,9 @@ from src.common.minio_client import get_minio_client
 client = get_minio_client()
 
 LANDING_BUCKET = "landing-zone"
+FORMATTED_BUCKET = "formatted-zone"
 
-FOLDERS = [
+LANDING_FOLDERS = [
     "temporal_landing/",
     "persistent_landing/",
     "persistent_landing/image_data/",
@@ -16,20 +17,27 @@ FOLDERS = [
     "persistent_landing/text_data/",
 ]
 
+FORMATTED_FOLDERS = [
+    "formatted/",
+    "formatted/image_data/",
+    "formatted/video_data/",
+    "formatted/text_data/",
+]
 
-def create_landing_bucket():
-    if not client.bucket_exists(LANDING_BUCKET):
-        client.make_bucket(LANDING_BUCKET)
+
+def create_bucket(bucket: str):
+    if not client.bucket_exists(bucket):
+        client.make_bucket(bucket)
 
 
-def create_folder(folder: str):
+def create_folder(bucket: str, folder: str):
     # Folders must end with "/"
     if not folder.endswith("/"):
         folder += "/"
 
     # The object we put inside the bucket is an empty folder
     client.put_object(
-        LANDING_BUCKET,
+        bucket,
         folder,
         data=BytesIO(b""),
         length=0,
@@ -38,11 +46,17 @@ def create_folder(folder: str):
 
 
 def main():
-    create_landing_bucket()
-    for f in FOLDERS:
-        create_folder(f)
+    # Crear landing bucket
+    create_bucket(LANDING_BUCKET)
+    for f in LANDING_FOLDERS:
+        create_folder(LANDING_BUCKET, f)
         print(f"[OK]: {LANDING_BUCKET}/{f}")
 
+    # Crear formatted bucket
+    create_bucket(FORMATTED_BUCKET)
+    for f in FORMATTED_FOLDERS:
+        create_folder(FORMATTED_BUCKET, f)
+        print(f"[OK]: {FORMATTED_BUCKET}/{f}")
 
 
 if __name__ == "__main__":

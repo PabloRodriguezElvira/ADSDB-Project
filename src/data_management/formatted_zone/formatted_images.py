@@ -2,59 +2,74 @@ import os
 import io
 import argparse
 from PIL import Image
-import boto3
-from botocore.client import Config
+from src.common.minio_client import get_minio_client
+from minio.error import S3Error
 
-def s3_client():
-    return boto3.client(
-        's3',
-        endpoint_url=os.getenv('MINIO_ENDPOINT', 'http://localhost:9000'),
-        aws_access_key_id=os.getenv('MINIO_ACCESS_KEY', 'admin'),
-        aws_secret_access_key=os.getenv('MINIO_SECRET_KEY', 'admin123'),
-        config=Config(signature_version='s3v4')
-    )
+# Buckets
+LANDING_BUCKET = "landing-zone"
+FORMATTED_BUCKET = "formatted-zone"
 
-def list_objects(s3, bucket, prefix):
-    resp = s3.list_objects_v2(Bucket=bucket, Prefix=prefix)
-    for obj in resp.get('Contents', []):
-        yield obj['Key']
+# Folders
+SRC_PREFIX = "persistent_landing/image_data/"
+DST_PREFIX = "formatted/image_data/"
 
-def convert_to_png(data, size=(512, 512)):
+def list_objects(client, bucket, prefix):
+    for obj in client.list_objects(bucket, prefix=prefix, recursive=True):
+        if not obj.object_name.endswith("/"):
+            yield obj.object_name
+
+def convert_to_png(data: bytes, size=(512, 512)) -> bytes:
     img = Image.open(io.BytesIO(data))
-
     img.thumbnail(size)
-
     buf = io.BytesIO()
     img.save(buf, format="PNG")
     buf.seek(0)
     return buf.read()
 
+def dst_key_for(src_key: str) -> str:
+    if src_key.startswith(SRC_PREFIX):
+        dst_key = src_key.replace(SRC_PREFIX, DST_PREFIX, 1)
+    else:
+        dst_key = DST_PREFIX + os.path.basename(src_key)
+    base, _ = os.path.splitext(dst_key)
+    return base + ".png"
+
+def process_image(client, key: str, size=(512, 512)):
+    print("Processing:", key)
+
+    # Download
+    obj = client.get_object(LANDING_BUCKET, key)
+    data = obj.read()
+    obj.close(); obj.release_conn()
+
+    # Convert
+    png_bytes = convert_to_png(data, size=size)
+
+    # Upload
+    dst_key = dst_key_for(key)
+    client.put_object(
+        FORMATTED_BUCKET,
+        dst_key,
+        io.BytesIO(png_bytes),
+        length=len(png_bytes),
+        content_type="image/png",
+    )
+    print(f"Saved in: {FORMATTED_BUCKET}/{dst_key}")
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--src-bucket', required=True)
-    parser.add_argument('--dst-bucket', required=True)
-    parser.add_argument('--prefix', default='')
-    parser.add_argument('--size', nargs=2, type=int, default=(512, 512))
+    parser.add_argument("--size", nargs=2, type=int, default=(512, 512))
     args = parser.parse_args()
 
-    s3 = s3_client()
+    client = get_minio_client()
 
-    for key in list_objects(s3, args.src_bucket, args.prefix):
-        print("Processing:", key)
-        obj = s3.get_object(Bucket=args.src_bucket, Key=key)
-        data = obj['Body'].read()
-
+    for key in list_objects(client, LANDING_BUCKET, SRC_PREFIX):
         try:
-            png_bytes = convert_to_png(data, size=tuple(args.size))
+            process_image(client, key, size=tuple(args.size))
+        except S3Error as e:
+            print(f"MinIO error with {key}: {e}")
         except Exception as e:
-            print("Error with", key, ":", e)
-            continue
-
-        base, _ = os.path.splitext(key)
-        dst_key = base + ".png"
-
-        s3.put_object(Bucket=args.dst_bucket, Key=dst_key, Body=png_bytes)
-        print("Saving in:", args.dst_bucket, "/", dst_key)
+            print(f"Error processing {key}: {e}")
 
 if __name__ == "__main__":
     main()
