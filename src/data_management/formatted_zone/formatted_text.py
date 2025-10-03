@@ -28,6 +28,16 @@ def dst_key_for(src_key: str) -> str:
     base, _ = os.path.splitext(dst_key)
     return base + ".json"
 
+
+def _has_content(value) -> bool:
+    if value is None:
+        return False
+    if isinstance(value, str):
+        return value.strip() != ""
+    if isinstance(value, (list, tuple)):
+        return len(value) > 0
+    return bool(value)
+
 def filter_entry(entry: dict, fields: list = None) -> dict:
     if fields is None:
         fields = FIELDS_TO_KEEP
@@ -36,7 +46,6 @@ def filter_entry(entry: dict, fields: list = None) -> dict:
     for field in fields:
         if field in entry:
             filtered[field] = entry[field]
-
     return filtered
 
 def _normalize_root(data):
@@ -63,12 +72,16 @@ def process_text(client, key: str):
 
     # Transform
     entries = _normalize_root(data)
-    filtered = [filter_entry(e) for e in entries]
+
+    must_filtered = []
+    for e in entries:
+        if all((f in e) and _has_content(e[f]) for f in FIELDS_TO_KEEP):
+            must_filtered.append(filter_entry(e))
 
     # Salida canónica y simple
     output = {
         "schema_version": 1,
-        "root": filtered
+        "root": must_filtered
     }
 
     # Upload
