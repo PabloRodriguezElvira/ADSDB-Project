@@ -1,8 +1,9 @@
-# formatted_videos_basic_refactored.py
 import os
 import tempfile
 import subprocess
 from pathlib import Path
+from datetime import datetime, timezone
+
 
 from src.common.minio_client import get_minio_client
 from minio.error import S3Error
@@ -26,6 +27,7 @@ def transcode_to_mp4(in_path: str, out_path: str):
         "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
         "-i", in_path,
         "-c:v", "libx264", "-crf", "23", "-preset", "veryfast",
+        "-pix_fmt", "yuv420p",
         "-c:a", "aac", "-b:a", "128k",
         "-movflags", "+faststart",
         out_path
@@ -60,17 +62,24 @@ def process_video(client, key: str):
         # Upload
         dst_key = dst_key_for(key)
         size = os.path.getsize(out_path)
+        metadata = {
+            "x-amz-meta-source-key": key,
+            "x-amz-meta-processed-at": datetime.now(timezone.utc).isoformat(),
+            "x-amz-meta-format": "mp4(h264/aac)"
+        }
         with open(out_path, "rb") as f:
             client.put_object(
                 FORMATTED_BUCKET,
                 dst_key,
                 data=f,
                 length=size,
-                content_type="video/mp4"
+                content_type="video/mp4",
+                metadata = metadata
             )
         print(f"Saved: {FORMATTED_BUCKET}/{dst_key}")
 
 def main():
+    
     client = get_minio_client()
     for key in list_objects(client, LANDING_BUCKET, SRC_PREFIX):
         try:
