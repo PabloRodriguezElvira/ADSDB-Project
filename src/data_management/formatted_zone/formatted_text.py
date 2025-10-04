@@ -1,7 +1,8 @@
 import os
 import io
 import json
-from datetime import datetime, timezone 
+from datetime import datetime
+from zoneinfo import ZoneInfo
 from src.common.minio_client import get_minio_client
 from minio.error import S3Error
 
@@ -90,7 +91,7 @@ def process_text(client, key: str):
 
     metadata = {
         "x-amz-meta-source-key": key,
-        "x-amz-meta-processed-at": datetime.now(timezone.utc).isoformat(),
+        "x-amz-meta-processed-at": datetime.now(ZoneInfo("Europe/Madrid")).isoformat(),
         "x-amz-meta-schema-version": "1",
     }
 

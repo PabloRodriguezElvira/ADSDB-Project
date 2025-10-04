@@ -2,3 +2,4 @@ minio
 kagglehub
 kaggle
 pathlib
+pillow

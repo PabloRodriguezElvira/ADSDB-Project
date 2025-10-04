@@ -4,6 +4,8 @@ from pathlib import Path
 from io import BytesIO
 from minio import Minio
 from minio.error import S3Error
+from datetime import datetime
+from zoneinfo import ZoneInfo
 from src.common.minio_client import get_minio_client
 
 # Config
@@ -11,7 +13,7 @@ PEXELS_API_KEY = os.getenv("PEXELS_API_KEY")
 PEXELS_VIDEO_SEARCH_URL = "https://api.pexels.com/videos/search"
 
 
-# Pick the most suitable file variant for a Pexels video, favoring HD under 1080p and otherwise the option with the greatest width.
+# Pick the most suitable file variant for a Pexels video, favoring HD (<= 1080p) and otherwise the option with the greatest width.
 def pick_best_video_file(video_files: list) -> dict | None:
     if not video_files:
         return None
@@ -56,11 +58,24 @@ def upload_video_streaming(client: Minio, bucket: str, folder: str, filename: st
         response.raw.decode_content = True
         content_length = response.headers.get("Content-Length")
 
+        metadata = {
+            "x-amz-meta-data-source": "video",
+            "x-amz-meta-ingested-at": datetime.now(ZoneInfo("Europe/Madrid")).isoformat(),
+        }
+
+        # If we know the length, we can upload response.raw using put_object.
         if content_length is not None:
-            client.put_object(bucket, object_name, response.raw, length=int(content_length))
+            client.put_object(
+                bucket,
+                object_name,
+                response.raw,
+                length=int(content_length),
+                metadata=metadata,
+            )
             print(f"[OK] Uploaded {url} to s3://{bucket}/{object_name}")
             return True
 
+        # If we don't know the length we have to use the buffer to store the image and know it.
         buffer = BytesIO()
         for chunk in response.iter_content(chunk_size=1024 * 1024):
             if chunk:
@@ -72,13 +87,17 @@ def upload_video_streaming(client: Minio, bucket: str, folder: str, filename: st
             return False
 
         buffer.seek(0)
-        client.put_object(bucket, object_name, buffer, length=size)
+        client.put_object(
+            bucket,
+            object_name,
+            buffer,
+            length=size,
+            metadata=metadata,
+        )
         print(f"[OK] Uploaded {url} to s3://{bucket}/{object_name}")
         return True
 
 
-# TODO: Add metadata into object names.
-# TODO: In landing_zone.py, move objects from temporal to persistent.
 
 # Coordinate the ingestion: search on Pexels, choose the best rendition, and push each video directly to MinIO.
 def main():
@@ -92,6 +111,7 @@ def main():
     print(f"[INFO] Searching Pexels videos: '{query}' (max {videos_amount})")
     videos = search_pexels_videos(query=query, videos_amount=videos_amount)
 
+    # Iterate through the videos, choose the best video file and upload it.
     uploaded_count = 0
     for video in videos:
         vid_id = video.get("id")

@@ -52,7 +52,6 @@ def create_folder(bucket: str, folder: str):
         content_type="application/octet-stream",
     )
 
-
 def main():
     # Create landing bucket
     create_bucket(LANDING_BUCKET)

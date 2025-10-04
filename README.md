@@ -10,7 +10,7 @@ Multi-Modal Data Management process for MDS-ADSDB Course.
 
 
 # Requisitos
-- Instalar librerias de Python con pip install -r requirements
+- Instalar librerias de Python con pip install -r requirements.txt
 - Instalar Docker (y docker-compose si no viene ya instalado)
 
 # API Key de Kaggle

@@ -2,7 +2,8 @@ import os
 import io
 import argparse
 from PIL import Image
-from datetime import datetime, timezone
+from datetime import datetime
+from zoneinfo import ZoneInfo
 from src.common.minio_client import get_minio_client
 from minio.error import S3Error
 
@@ -50,7 +51,7 @@ def process_image(client, key: str, size=(512, 512)):
     dst_key = dst_key_for(key)
     metadata = {
         "x-amz-meta-source-key": key,
-        "x-amz-meta-processed-at": datetime.now(timezone.utc).isoformat(),
+        "x-amz-meta-processed-at": datetime.now(ZoneInfo("Europe/Madrid")).isoformat(),
         "x-amz-meta-format": "png",
     }
     client.put_object(

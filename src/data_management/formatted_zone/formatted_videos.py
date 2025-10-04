@@ -2,9 +2,8 @@ import os
 import tempfile
 import subprocess
 from pathlib import Path
-from datetime import datetime, timezone
-
-
+from datetime import datetime
+from zoneinfo import ZoneInfo
 from src.common.minio_client import get_minio_client
 from minio.error import S3Error
 
@@ -64,7 +63,7 @@ def process_video(client, key: str):
         size = os.path.getsize(out_path)
         metadata = {
             "x-amz-meta-source-key": key,
-            "x-amz-meta-processed-at": datetime.now(timezone.utc).isoformat(),
+            "x-amz-meta-processed-at": datetime.now(ZoneInfo("Europe/Madrid")).isoformat(),
             "x-amz-meta-format": "mp4(h264/aac)"
         }
         with open(out_path, "rb") as f:
