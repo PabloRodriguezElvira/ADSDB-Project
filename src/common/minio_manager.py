@@ -32,6 +32,12 @@ TRUSTED_FOLDERS = [
     "trusted/text_data/",
 ]
 
+REJECTED_FOLDERS = [
+    "rejected/",
+    "rejected/image_data/",
+    "rejected/video_data/",
+    "rejected/text_data/",
+]
 
 def create_bucket(bucket: str):
     if not client.bucket_exists(bucket):
@@ -71,6 +77,11 @@ def main():
         create_folder(TRUSTED_BUCKET, f)
         print(f"[OK]: {TRUSTED_BUCKET}/{f}")
 
+    # Create rejected bucket
+    create_bucket(REJECTED_BUCKET)
+    for f in REJECTED_FOLDERS:
+        create_folder(REJECTED_BUCKET, f)
+        print(f"[OK]: {REJECTED_BUCKET}/{f}")
 
 if __name__ == "__main__":
     try:
