@@ -9,6 +9,7 @@ client = get_minio_client()
 LANDING_BUCKET = "landing-zone"
 FORMATTED_BUCKET = "formatted-zone"
 TRUSTED_BUCKET = "trusted-zone"
+REJECTED_BUCKET = "rejected-zone"
 
 LANDING_FOLDERS = [
     "temporal_landing/",
@@ -30,6 +31,13 @@ TRUSTED_FOLDERS = [
     "trusted/image_data/",
     "trusted/video_data/",
     "trusted/text_data/",
+]
+
+REJECTED_FOLDERS = [
+    "rejected/",
+    "rejected/image_data/",
+    "rejected/video_data/",
+    "rejected/text_data/",
 ]
 
 
@@ -70,6 +78,12 @@ def main():
     for f in TRUSTED_FOLDERS:
         create_folder(TRUSTED_BUCKET, f)
         print(f"[OK]: {TRUSTED_BUCKET}/{f}")
+
+     # Create rejected bucket
+    create_bucket(TRUSTED_BUCKET)
+    for f in REJECTED_FOLDERS:
+        create_folder(REJECTED_BUCKET, f)
+        print(f"[OK]: {REJECTED_BUCKET}/{f}")
 
 
 if __name__ == "__main__":
