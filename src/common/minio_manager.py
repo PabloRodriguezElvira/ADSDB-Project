@@ -9,6 +9,8 @@ client = get_minio_client()
 LANDING_BUCKET = "landing-zone"
 FORMATTED_BUCKET = "formatted-zone"
 TRUSTED_BUCKET = "trusted-zone"
+REJECTED_BUCKET = "rejected-zone"
+
 
 LANDING_FOLDERS = [
     "temporal_landing/",
