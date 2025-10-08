@@ -49,7 +49,7 @@ REJECTED_FOLDERS = [
     "rejected/video_data/",
     "rejected/text_data/",
 ]
-
+hola
 def create_bucket(bucket: str):
     if not client.bucket_exists(bucket):
         client.make_bucket(bucket)
