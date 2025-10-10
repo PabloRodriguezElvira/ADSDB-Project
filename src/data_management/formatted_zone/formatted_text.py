@@ -1,6 +1,7 @@
 import os
 import io
 import json
+import re
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from src.common.minio_client import get_minio_client
@@ -29,25 +30,14 @@ def dst_key_for(src_key: str) -> str:
     base, _ = os.path.splitext(dst_key)
     return base + ".json"
 
-
 def _has_content(value) -> bool:
     if value is None:
         return False
     if isinstance(value, str):
         return value.strip() != ""
     if isinstance(value, (list, tuple)):
-        return len(value) > 0
+        return any(_has_content(v) for v in value)
     return bool(value)
-
-def filter_entry(entry: dict, fields: list = None) -> dict:
-    if fields is None:
-        fields = FIELDS_TO_KEEP
-
-    filtered = {}
-    for field in fields:
-        if field in entry:
-            filtered[field] = entry[field]
-    return filtered
 
 def _normalize_root(data):
     if isinstance(data, dict) and "root" in data and isinstance(data["root"], list):
@@ -55,6 +45,19 @@ def _normalize_root(data):
     if isinstance(data, list):
         return data
     raise ValueError("Unsupported JSON structure: expected list or dict with 'root'.")
+
+def _to_space_text(value) -> str:
+    if value is None:
+        s = ""
+    elif isinstance(value, str):
+        s = value
+    elif isinstance(value, (list, tuple)):
+        s = " ".join(str(v) for v in value if str(v).strip())
+    else:
+        s = str(value)
+
+    s = re.sub(r"\s+", " ", s).strip()
+    return s
 
 def process_text(client, key: str):
     print("Processing:", key)
@@ -74,15 +77,23 @@ def process_text(client, key: str):
     # Transform
     entries = _normalize_root(data)
 
-    must_filtered = []
+    flattened = []
     for e in entries:
-        if all((f in e) and _has_content(e[f]) for f in FIELDS_TO_KEEP):
-            must_filtered.append(filter_entry(e))
 
-    # Salida canónica y simple
+        if all((f in e) and _has_content(e[f]) for f in FIELDS_TO_KEEP):
+            title = _to_space_text(e.get("title"))
+            ingredients = _to_space_text(e.get("ingredients"))
+            directions = _to_space_text(e.get("directions"))
+
+            joined = " ".join(x for x in [title, ingredients, directions] if x)
+            if joined:
+                flattened.append(joined)
+
+    if not flattened:
+        raise ValueError(f"No valid entries with required fields in {key}")
+
     output = {
-        "schema_version": 1,
-        "root": must_filtered
+        "root": flattened
     }
 
     # Upload
@@ -92,7 +103,7 @@ def process_text(client, key: str):
     metadata = {
         "x-amz-meta-source-key": key,
         "x-amz-meta-processed-at": datetime.now(ZoneInfo("Europe/Madrid")).isoformat(),
-        "x-amz-meta-schema-version": "1",
+        "x-amz-meta-output-format": "json_flat_concat"
     }
 
     client.put_object(
