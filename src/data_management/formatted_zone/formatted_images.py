@@ -1,7 +1,7 @@
 import os
 import io
 import argparse
-from PIL import Image
+from PIL import Image, ImageOps
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from src.common.minio_client import get_minio_client
@@ -22,11 +22,21 @@ def list_objects(client, bucket, prefix):
 
 def convert_to_png(data: bytes, size=(512, 512)) -> bytes:
     img = Image.open(io.BytesIO(data))
-    img.thumbnail(size)
+    img = ImageOps.exif_transpose(img)
+
+    img_resized = ImageOps.fit(
+        img,
+        size,
+        method=Image.Resampling.LANCZOS,
+        centering=(0.5, 0.5)
+    )
+
+    img_rgba = img_resized.convert("RGBA")
     buf = io.BytesIO()
-    img.save(buf, format="PNG")
+    img_rgba.save(buf, format="PNG")
     buf.seek(0)
     return buf.read()
+
 
 def dst_key_for(src_key: str) -> str:
     if src_key.startswith(SRC_PREFIX):
@@ -42,7 +52,8 @@ def process_image(client, key: str, size=(512, 512)):
     # Download
     obj = client.get_object(LANDING_BUCKET, key)
     data = obj.read()
-    obj.close(); obj.release_conn()
+    obj.close()
+    obj.release_conn()
 
     # Convert
     png_bytes = convert_to_png(data, size=size)
@@ -52,6 +63,7 @@ def process_image(client, key: str, size=(512, 512)):
     metadata = {
         "x-amz-meta-source-key": key,
         "x-amz-meta-processed-at": datetime.now(ZoneInfo("Europe/Madrid")).isoformat(),
+        "x-amz-meta-size": f"{size[0]}x{size[1]}",
         "x-amz-meta-format": "png",
     }
     client.put_object(
