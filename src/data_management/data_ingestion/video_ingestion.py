@@ -13,8 +13,12 @@ PEXELS_API_KEY = os.getenv("PEXELS_API_KEY")
 PEXELS_VIDEO_SEARCH_URL = "https://api.pexels.com/videos/search"
 
 
-# Pick the most suitable file variant for a Pexels video, favoring HD (<= 1080p) and otherwise the option with the greatest width.
 def pick_best_video_file(video_files: list) -> dict | None:
+    """
+    Select the most suitable video file from a Pexels video entry.
+    Prefer HD (≤1080p) files; otherwise, choose the file with the largest width/bitrate.
+    """
+
     if not video_files:
         return None
 
@@ -25,8 +29,12 @@ def pick_best_video_file(video_files: list) -> dict | None:
     return max(video_files, key=lambda v: (v.get("width", 0), v.get("bitrate", 0) or 0))
 
 
-# Collect the requested amount of videos from Pexels, paginating the API (80 items max per page).
 def search_pexels_videos(query: str, videos_amount: int, per_page: int = 80):
+    """
+    Query the Pexels API to collect a given number of videos matching the search query.
+    Handles pagination automatically (max 80 items per page).
+    """
+
     assert PEXELS_API_KEY, "PEXELS_API_KEY not found in environment."
     headers = {"Authorization": PEXELS_API_KEY}
     results = []
@@ -49,8 +57,12 @@ def search_pexels_videos(query: str, videos_amount: int, per_page: int = 80):
     return results[:videos_amount]
 
 
-# Stream a remote video into MinIO without persisting it locally; when the size is unknown, we use BytesIO to buffer it in memory.
 def upload_video_streaming(client: Minio, bucket: str, folder: str, filename: str, url: str) -> bool:
+    """
+    Stream a remote video from Pexels directly into MinIO.
+    If content length is known, stream directly; otherwise, buffer with BytesIO before uploading.
+    """
+
     object_name = f"{folder}/{filename}"
 
     with requests.get(url, stream=True, timeout=60) as response:
@@ -63,7 +75,7 @@ def upload_video_streaming(client: Minio, bucket: str, folder: str, filename: st
             "x-amz-meta-ingested-at": datetime.now(ZoneInfo("Europe/Madrid")).isoformat(),
         }
 
-        # If we know the length, we can upload response.raw using put_object.
+        # If the size is known, upload the stream directly.
         if content_length is not None:
             client.put_object(
                 bucket,
@@ -75,7 +87,7 @@ def upload_video_streaming(client: Minio, bucket: str, folder: str, filename: st
             print(f"[OK] Uploaded {url} to s3://{bucket}/{object_name}")
             return True
 
-        # If we don't know the length we have to use the buffer to store the image and know it.
+        # Otherwise, buffer the content in memory to determine its size.
         buffer = BytesIO()
         for chunk in response.iter_content(chunk_size=1024 * 1024):
             if chunk:
@@ -98,9 +110,12 @@ def upload_video_streaming(client: Minio, bucket: str, folder: str, filename: st
         return True
 
 
-
-# Coordinate the ingestion: search on Pexels, choose the best rendition, and push each video directly to MinIO.
 def main():
+    """
+    Search for videos on Pexels, select the best file for each result,
+    and upload them directly to the MinIO temporal landing bucket.
+    """
+    
     query = "healthy food cooking"
     videos_amount = 3
     bucket = "landing-zone"
@@ -111,7 +126,6 @@ def main():
     print(f"[INFO] Searching Pexels videos: '{query}' (max {videos_amount})")
     videos = search_pexels_videos(query=query, videos_amount=videos_amount)
 
-    # Iterate through the videos, choose the best video file and upload it.
     uploaded_count = 0
     for video in videos:
         vid_id = video.get("id")
@@ -123,7 +137,7 @@ def main():
         url = best.get("link")
         file_type = (best.get("file_type") or "").lower()
 
-        # Try to get the extension from the file_type or the url. If not possible, we use .mp4.
+        # Try to infer extension from MIME type or fallback to .mp4
         if file_type.startswith("video/"):
             ext = f".{file_type.split('/', 1)[1]}"
         else:
@@ -148,6 +162,10 @@ def main():
 
 
 if __name__ == "__main__":
+    """
+    Script entry point: handles configuration, MinIO, and HTTP errors.
+    """
+
     try:
         main()
     except AssertionError as exc:

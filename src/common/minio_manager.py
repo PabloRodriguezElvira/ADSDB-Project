@@ -6,6 +6,8 @@ from src.common.minio_client import get_minio_client
 # Localhost MinIO client
 client = get_minio_client()
 
+# Define all the zones and the sub-folders inside them.
+
 LANDING_BUCKET = "landing-zone"
 FORMATTED_BUCKET = "formatted-zone"
 TRUSTED_BUCKET = "trusted-zone"
@@ -38,11 +40,19 @@ REJECTED_FOLDERS = [
 ]
 
 def create_bucket(bucket: str):
+    """
+    Create the bucket if it does not exist.
+    """
+
     if not client.bucket_exists(bucket):
         client.make_bucket(bucket)
 
 
 def create_folder(bucket: str, folder: str):
+    """
+    Creates the folder inside the bucker
+    """
+
     # Folders must end with "/"
     if not folder.endswith("/"):
         folder += "/"
@@ -56,7 +66,13 @@ def create_folder(bucket: str, folder: str):
         content_type="application/octet-stream",
     )
 
+
+
 def main():
+    """
+    Creates the buckets with all their sub buckets
+    """
+
     # Create landing bucket
     create_bucket(LANDING_BUCKET)
     for f in LANDING_FOLDERS:
@@ -81,7 +97,12 @@ def main():
         create_folder(REJECTED_BUCKET, f)
         print(f"[OK]: {REJECTED_BUCKET}/{f}")
 
+
 if __name__ == "__main__":
+    """
+    Entry poiny: runs main and handles MinIO errors
+    """
+
     try:
         main()
     except S3Error as e:
