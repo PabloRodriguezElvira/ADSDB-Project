@@ -10,7 +10,6 @@ from minio import Minio
 from minio.error import S3Error
 
 
-
 # Buckets
 FORMATTED_BUCKET = "formatted-zone"
 TRUSTED_BUCKET = "trusted-zone"
@@ -19,7 +18,6 @@ TRUSTED_BUCKET = "trusted-zone"
 SRC_PREFIX = "formatted/text_data/"
 DST_PREFIX = "trusted/text_data/"
 
-FIELDS_TO_KEEP = ["title", "ingredients", "directions"]
 
 def list_objects(client, bucket, prefix):
     for obj in client.list_objects(bucket, prefix=prefix, recursive=True):
@@ -27,7 +25,7 @@ def list_objects(client, bucket, prefix):
             yield obj.object_name
 
 
-def dst_key_for(src_key: str) -> str:
+def dst_key_for(src_key: str):
     if src_key.startswith(SRC_PREFIX):
         dst_key = src_key.replace(SRC_PREFIX, DST_PREFIX, 1)
     else:
@@ -35,80 +33,76 @@ def dst_key_for(src_key: str) -> str:
     base, _ = os.path.splitext(dst_key)
     return base + ".json"
 
-#functions to clean
-#remove when we have more than one white spaces
-def remove_whitespace(text: str) -> str:
+# functions to clean
+# remove when we have more than one white spaces
+def remove_whitespace(text: str):
     if isinstance(text, str):
       text = text.replace('\u200b', '')   # zero-width space
       text = text.replace('\ufeff', '')   # BOM mark (invisible al inicio)
-      text = re.sub(r'\s+', ' ', text)    # substitutes whatever seq of 1 or more spaces by " "
+      text = re.sub(r'\s+', ' ', text)    # replaces any sequence of spaces, tabs, or newlines with a single space
       return text.strip() # removes the first and last space
     else:
       return text
 
-#function to anonymize
-def anonymize_text(text: str, mask_names: bool = False) -> str:
+# function to anonymize
+def anonymize_text(text: str):
     if isinstance(text, str):
       text = re.sub(r'\b[\w\.-]+@[\w\.-]+\.\w+\b', '[EMAIL]', text)
       text = re.sub(r'(https?://\S+|www\.\S+)', '[URL]', text)
       text = re.sub(r'@\w+', '[USER]', text)
       text = re.sub(r'\+?\d[\d\s\-]{7,}\d', '[PHONE]', text)
-      if mask_names:#to anonymize names
-          text = re.sub(r'\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+\b', '[NAME]', text)
       return text
     else:
       return text
 
-#lower words but preserving the tags
-def to_lower_preserving_tags(text: str) -> str:
+# lower words but preserving the tags
+def to_lower_preserving_tags(text: str):
     if isinstance(text, str):
-      pattern = re.compile(r'\[([A-Z]+)\]')
+      tags = re.compile(r'\[([A-Z]+)\]')
       lowered = text.lower()
-      return pattern.sub(lambda m: f'[{m.group(1)}]', lowered)
+      return tags.sub(lambda m: f'[{m.group(1)}]', lowered)# return the pattern
     else:
       return text
 
-# combining the three functiona
-def clean_text(text: str) -> str:
+# combining the three functions
+def clean_text(text: str):
     text = remove_whitespace(text)
-    text = anonymize_text(text, mask_names=True)
+    text = anonymize_text(text)
     text = to_lower_preserving_tags(text)
     return text
 
 def process_text(client, key: str):
-    print("Processing:", key)
-
     obj = client.get_object(FORMATTED_BUCKET, key)
     raw = obj.read()
     obj.close(); obj.release_conn()
 
-    text = raw.decode("utf-8")
-    data = json.loads(text)
+    # transforming the json in a python
+    try:
+        data = json.loads(raw.decode("utf-8"))# we convert it to a python object to apply functions
+    except Exception as e:
+        raise ValueError(f"Could not parse JSON in {key}: {e}")
+
     entries = data.get("root", [])
 
+    if not isinstance(entries, list) or not entries:# check if we really got a list ["...","..."]
+        print(f"No valid 'root' list found in {key}")
+        return
+
+    # Clean function to every recipe 
     cleaned_entries = []
+    for entry in entries:
+        if isinstance(entry, str):          
+            cleaned_entry = clean_text(entry)  # clean function to every "recipe"
+            cleaned_entries.append(cleaned_entry)  # keep it in the list
 
-    for e in entries:
-        cleaned_entry = {}
-        for field in FIELDS_TO_KEEP:
-            if field not in e:
-                continue
-
-            value = e[field]
-
-            # apply the clean_text function to str
-            if isinstance(value, list):
-                cleaned_entry[field] = [clean_text(x) for x in value]
-            elif isinstance(value, str):
-                cleaned_entry[field] = clean_text(value)
-        cleaned_entries.append(cleaned_entry)
-
+    # Generate the output as in the formatted-zone
     output = {
         "schema_version": 1,
         "root": cleaned_entries
     }
 
-    payload = json.dumps(output, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8")
+    # we convert the python in a json
+    transform = json.dumps(output, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8")
     dst_key = dst_key_for(key)
 
     metadata = {
@@ -117,16 +111,17 @@ def process_text(client, key: str):
         "x-amz-meta-schema-version": "1",
     }
 
+    # Uploaded
     client.put_object(
         TRUSTED_BUCKET,
         dst_key,
-        io.BytesIO(payload),
-        length=len(payload),
+        io.BytesIO(transform),
+        length=len(transform),
         content_type="application/json",
         metadata=metadata
     )
 
-    print(f" Saved cleaned file in: {TRUSTED_BUCKET}/{dst_key}")
+    print(f"Cleaned JSON in: {TRUSTED_BUCKET}/{dst_key}")
 
 def main():
     client = get_minio_client()
