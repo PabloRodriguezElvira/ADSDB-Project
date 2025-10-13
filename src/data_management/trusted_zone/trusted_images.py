@@ -11,8 +11,8 @@ import cv2
 import numpy as np
 import hashlib
 from collections import defaultdict
-import warnings
-warnings.filterwarnings("ignore", category=UserWarning)
+#import warnings
+#warnings.filterwarnings("ignore", category=UserWarning)
 
 # Buckets
 FORMATTED_BUCKET = "formatted-zone"
@@ -28,23 +28,24 @@ def list_objects(client, bucket, prefix):
         if not obj.object_name.endswith("/"):
             yield obj.object_name
 
-def dst_key_for(src_key: str, dst_prefix: str) -> str:
+def dst_key_for(src_key: str, dst_prefix: str):
     if src_key.startswith(SRC_PREFIX):
         dst_key = src_key.replace(SRC_PREFIX, dst_prefix, 1)
     else:
         dst_key = os.path.join(dst_prefix, os.path.basename(src_key))
     return dst_key
 
-#checking out if we are able to open all the images, the size, png, corr
-def is_image_valid(data: bytes) -> bool:
+# checking out if we are able to open all the images
+def is_image_valid(data: bytes):
     try:
         img = Image.open(io.BytesIO(data))
         img.verify()
         return True
     except (UnidentifiedImageError, OSError):
         return False
-
-def image_properties(data: bytes, expected_size=(512, 512)) -> dict:
+    
+# check image properties
+def image_properties(data: bytes, expected_size=(512, 512)):
     result = {
 
         "format": None,
@@ -55,7 +56,7 @@ def image_properties(data: bytes, expected_size=(512, 512)) -> dict:
         "format_ok": False,
         "error": None
     }
-
+    # let's check if the images meet the expected characteristics
     try:
         with Image.open(io.BytesIO(data)) as img:
             img.load()
@@ -79,28 +80,18 @@ def image_properties(data: bytes, expected_size=(512, 512)) -> dict:
     return result
 
 # Image properties such as brightness
-def brightness_and_contrast(data: bytes) -> dict:
+def brightness_and_contrast(data: bytes):
     img = Image.open(io.BytesIO(data)).convert("L")  # grey's scale
-    stat = ImageStat.Stat(img)
-    brightness = stat.mean[0] / 255.0  # brightness normalized
-    contrast= stat.stddev[0] / 255.0  # contrast normalized
+    stat = ImageStat.Stat(img)# create an object with images features
+    # we get the average from all the pixels  [0] and we standarize (from 0 to 1)
+    brightness = stat.mean[0] / 255.0  
+    contrast= stat.stddev[0] / 255.0  
 
     return {
         "brightness": round(brightness, 3),
         "contrast": round(contrast, 3),
-        "brightness_ok": 0.3 <= brightness <= 0.7,
+        "brightness_ok": 0.2 <= brightness <= 0.8,
         "contrast_ok": contrast >= 0.2
-    }
-
-def sharpness(data: bytes) -> dict:
-    nparr = np.frombuffer(data, np.uint8)
-    img = cv2.imdecode(nparr, cv2.IMREAD_GRAYSCALE)
-
-    variance = cv2.Laplacian(img, cv2.CV_64F).var()
-
-    return {
-        "sharpness": round(float(variance), 2),
-        "sharpness_ok": variance > 50  # threshold
     }
 
 # Function to combine above functions
@@ -116,7 +107,7 @@ def validate_images(images: dict) -> dict:
 
         props = image_properties(data)
         bright = brightness_and_contrast(data)
-        sharp = sharpness(data)
+        
 
         if (
             props["size_ok"]
@@ -124,7 +115,6 @@ def validate_images(images: dict) -> dict:
             and props["color_ok"]
             and bright["brightness_ok"]
             and bright["contrast_ok"]
-            and sharp["sharpness_ok"]
         ):
             valid_images[name] = data
         else:
@@ -139,16 +129,14 @@ def validate_images(images: dict) -> dict:
                 reasons.append("Bad brightness")
             if not bright["contrast_ok"]:
                 reasons.append("Low contrast")
-            if not sharp["sharpness_ok"]:
-                reasons.append("Bad sharpness")
             invalid_images[name] = ", ".join(reasons)
 
     return {"valid": valid_images, "invalid": invalid_images}
 
-def duplicates(images: dict) -> dict:
-    groups = {"training": {}, "validation": {}, "evaluation": {}}
+def duplicates(images: dict):# check if we have copy paste functions per group
+    groups = {"training": {}, "validation": {}, "evaluation": {}}# create a dictionary to put the images
 
-    for name, data in images.items():
+    for name, data in images.items():# we insert the name and bytes of the image 
         lname = name.lower()
         if "-training-" in lname:
             groups["training"][name] = data
@@ -158,19 +146,19 @@ def duplicates(images: dict) -> dict:
             groups["evaluation"][name] = data
     results = {}
 
-    for split, subset in groups.items():
-        md5_hashes = {}
-        duplicates = []
+    for split, subset in groups.items():# subset is the dict with name and data of every group
+        md5_dup = {}
+        duplicates = []# keep the name of the duplicate images
         for name, data in subset.items():
-            md5 = hashlib.md5(data).hexdigest()
-            if md5 in md5_hashes:
-                duplicates.append((name, md5_hashes[md5]))
+            md5 = hashlib.md5(data).hexdigest()# check duplicates per group
+            if md5 in md5_dup:
+                duplicates.append((name, md5_dup[md5]))# the current image and which is in the dict md5_dup
             else:
-                md5_hashes[md5] = name
+                md5_dup[md5] = name
         unique_count = len(subset) - len(set([a for a, _ in duplicates]))
         results[split] = {
             "duplicates": duplicates,
-            "unique_count": unique_count #how many unique images we have
+            "unique_count": unique_count # how many unique images we have
         }
 
         print(f"\n {split.upper()}")
@@ -180,20 +168,22 @@ def duplicates(images: dict) -> dict:
         if duplicates:
             print("Duplicate images:")
             for a, b in duplicates:
-                print(f"   - {a} == {b}")
+                print(f" {a} == {b}")
         else:
             print("No duplicates")
     return results
 
 def count_images_by_food(images: dict):
     counts = {
-        "training": defaultdict(int),
-        "validation": defaultdict(int),
-        "evaluation": defaultdict(int),
+        "training": {},
+        "validation": {},
+        "evaluation": {},
     }
 
     for name in images.keys():
         lname = name.lower()
+
+        # Detect the group
         if "-training-" in lname:
             group = "training"
         elif "-validation-" in lname:
@@ -203,8 +193,13 @@ def count_images_by_food(images: dict):
         else:
             continue
 
-        food = os.path.basename(name).split("-")[0].capitalize()
-        counts[group][food] += 1
+        # Extract the food name before the group
+        base = os.path.basename(name)
+        food = re.split(r"-(training|validation|evaluation)-", base, flags=re.IGNORECASE)[0]
+        food = food.replace(".png", "").capitalize()
+
+        # Sumamos al contador
+        counts[group][food] = counts[group].get(food, 0) + 1
 
     return counts
 
@@ -221,14 +216,10 @@ def process_images(client):
     valid_images = validated["valid"]
     invalid_images = validated["invalid"]
 
-    print("\n VALIDATION SUMMARY")
-    print(f"Valid images: {len(valid_images)}")
-    print(f"Invalid images: {len(invalid_images)}")
-
-    # Duplicates
+    # Duplicates only to valid images
     duplicates_report = duplicates(valid_images)
 
-    # Upload not duplicate and valid images
+    # Upload not duplicate and valid images and we uploaded to trusted zone
     uploaded_trusted = 0
     for name, data in valid_images.items():
         # Check if there are duplicate images
@@ -280,14 +271,11 @@ def process_images(client):
             # Keep it for the final report
             rejected_report.setdefault(reason, []).append(dst_key)
 
-
-        print(f"\n Uploaded {uploaded_rejected} images to {REJECTED_BUCKET}")
-
+    # Reasons why they are in the recected bucket
         print("\nREJECTION REPORT")
         for reason, files in rejected_report.items():
-            print(f"\n {reason}:")
-            for f in files:
-                print(f"   - {f}")
+            count = len(files)
+            print(f" - {reason}: {count} image(s) rejected")
 
     else:
         print("\n No rejected images.")
@@ -295,15 +283,16 @@ def process_images(client):
 
     print(f"\nUploaded to Trusted: {uploaded_trusted}")
     print(f"Uploaded to Rejected: {uploaded_rejected}")
+    # Report of the amount of types of images we have in the trusted bucket per group
     food_counts = count_images_by_food(valid_images)
-    print("\n IMAGE COUNT BY FOOD TYPE (Validated images)")
+    print("\n Validated images per group")
     for group, foods in food_counts.items():
         print(f"\n {group.upper()}")
         if not foods:
-            print("   (no images found)")
+            print("No images found")
         else:
             for food, count in sorted(foods.items()):
-                print(f"   {food}: {count}")
+                print(f" {food}: {count}")
 
 def main():
       try:
