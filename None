@@ -1,0 +1,162 @@
+Traceback (most recent call last):
+  File [35m"/home/paloli/Documentos/MDS/ADSDB/ADSDB-Project/.venv/lib/python3.13/site-packages/urllib3/connection.py"[0m, line [35m198[0m, in [35m_new_conn[0m
+    sock = connection.create_connection(
+        (self._dns_host, self.port),
+    ...<2 lines>...
+        socket_options=self.socket_options,
+    )
+  File [35m"/home/paloli/Documentos/MDS/ADSDB/ADSDB-Project/.venv/lib/python3.13/site-packages/urllib3/util/connection.py"[0m, line [35m85[0m, in [35mcreate_connection[0m
+    raise err
+  File [35m"/home/paloli/Documentos/MDS/ADSDB/ADSDB-Project/.venv/lib/python3.13/site-packages/urllib3/util/connection.py"[0m, line [35m73[0m, in [35mcreate_connection[0m
+    [31msock.connect[0m[1;31m(sa)[0m
+    [31m~~~~~~~~~~~~[0m[1;31m^^^^[0m
+[1;35mConnectionRefusedError[0m: [35m[Errno 111] Connection refused[0m
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File [35m"/home/paloli/Documentos/MDS/ADSDB/ADSDB-Project/.venv/lib/python3.13/site-packages/urllib3/connectionpool.py"[0m, line [35m787[0m, in [35murlopen[0m
+    response = self._make_request(
+        conn,
+    ...<10 lines>...
+        **response_kw,
+    )
+  File [35m"/home/paloli/Documentos/MDS/ADSDB/ADSDB-Project/.venv/lib/python3.13/site-packages/urllib3/connectionpool.py"[0m, line [35m493[0m, in [35m_make_request[0m
+    [31mconn.request[0m[1;31m([0m
+    [31m~~~~~~~~~~~~[0m[1;31m^[0m
+        [1;31mmethod,[0m
+        [1;31m^^^^^^^[0m
+    ...<6 lines>...
+        [1;31menforce_content_length=enforce_content_length,[0m
+        [1;31m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+    [1;31m)[0m
+    [1;31m^[0m
+  File [35m"/home/paloli/Documentos/MDS/ADSDB/ADSDB-Project/.venv/lib/python3.13/site-packages/urllib3/connection.py"[0m, line [35m445[0m, in [35mrequest[0m
+    [31mself.endheaders[0m[1;31m()[0m
+    [31m~~~~~~~~~~~~~~~[0m[1;31m^^[0m
+  File [35m"/usr/lib/python3.13/http/client.py"[0m, line [35m1333[0m, in [35mendheaders[0m
+    [31mself._send_output[0m[1;31m(message_body, encode_chunked=encode_chunked)[0m
+    [31m~~~~~~~~~~~~~~~~~[0m[1;31m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+  File [35m"/usr/lib/python3.13/http/client.py"[0m, line [35m1093[0m, in [35m_send_output[0m
+    [31mself.send[0m[1;31m(msg)[0m
+    [31m~~~~~~~~~[0m[1;31m^^^^^[0m
+  File [35m"/usr/lib/python3.13/http/client.py"[0m, line [35m1037[0m, in [35msend[0m
+    [31mself.connect[0m[1;31m()[0m
+    [31m~~~~~~~~~~~~[0m[1;31m^^[0m
+  File [35m"/home/paloli/Documentos/MDS/ADSDB/ADSDB-Project/.venv/lib/python3.13/site-packages/urllib3/connection.py"[0m, line [35m276[0m, in [35mconnect[0m
+    self.sock = [31mself._new_conn[0m[1;31m()[0m
+                [31m~~~~~~~~~~~~~~[0m[1;31m^^[0m
+  File [35m"/home/paloli/Documentos/MDS/ADSDB/ADSDB-Project/.venv/lib/python3.13/site-packages/urllib3/connection.py"[0m, line [35m213[0m, in [35m_new_conn[0m
+    raise NewConnectionError(
+        self, f"Failed to establish a new connection: {e}"
+    ) from e
+[1;35murllib3.exceptions.NewConnectionError[0m: [35m<urllib3.connection.HTTPConnection object at 0x7eff41744b90>: Failed to establish a new connection: [Errno 111] Connection refused[0m
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File [35m"<frozen runpy>"[0m, line [35m198[0m, in [35m_run_module_as_main[0m
+  File [35m"<frozen runpy>"[0m, line [35m88[0m, in [35m_run_code[0m
+  File [35m"/home/paloli/Documentos/MDS/ADSDB/ADSDB-Project/src/common/minio_manager.py"[0m, line [35m107[0m, in [35m<module>[0m
+    [31mmain[0m[1;31m()[0m
+    [31m~~~~[0m[1;31m^^[0m
+  File [35m"/home/paloli/Documentos/MDS/ADSDB/ADSDB-Project/src/common/minio_manager.py"[0m, line [35m77[0m, in [35mmain[0m
+    [31mcreate_bucket[0m[1;31m(LANDING_BUCKET)[0m
+    [31m~~~~~~~~~~~~~[0m[1;31m^^^^^^^^^^^^^^^^[0m
+  File [35m"/home/paloli/Documentos/MDS/ADSDB/ADSDB-Project/src/common/minio_manager.py"[0m, line [35m47[0m, in [35mcreate_bucket[0m
+    if not [31mclient.bucket_exists[0m[1;31m(bucket)[0m:
+           [31m~~~~~~~~~~~~~~~~~~~~[0m[1;31m^^^^^^^^[0m
+  File [35m"/home/paloli/Documentos/MDS/ADSDB/ADSDB-Project/.venv/lib/python3.13/site-packages/minio/api.py"[0m, line [35m700[0m, in [35mbucket_exists[0m
+    [31mself._execute[0m[1;31m("HEAD", bucket_name)[0m
+    [31m~~~~~~~~~~~~~[0m[1;31m^^^^^^^^^^^^^^^^^^^^^[0m
+  File [35m"/home/paloli/Documentos/MDS/ADSDB/ADSDB-Project/.venv/lib/python3.13/site-packages/minio/api.py"[0m, line [35m441[0m, in [35m_execute[0m
+    region = self._get_region(bucket_name)
+  File [35m"/home/paloli/Documentos/MDS/ADSDB/ADSDB-Project/.venv/lib/python3.13/site-packages/minio/api.py"[0m, line [35m498[0m, in [35m_get_region[0m
+    response = self._url_open(
+        "GET",
+    ...<2 lines>...
+        query_params={"location": ""},
+    )
+  File [35m"/home/paloli/Documentos/MDS/ADSDB/ADSDB-Project/.venv/lib/python3.13/site-packages/minio/api.py"[0m, line [35m306[0m, in [35m_url_open[0m
+    response = self._http.urlopen(
+        method,
+    ...<3 lines>...
+        preload_content=preload_content,
+    )
+  File [35m"/home/paloli/Documentos/MDS/ADSDB/ADSDB-Project/.venv/lib/python3.13/site-packages/urllib3/poolmanager.py"[0m, line [35m443[0m, in [35murlopen[0m
+    response = conn.urlopen(method, u.request_uri, **kw)
+  File [35m"/home/paloli/Documentos/MDS/ADSDB/ADSDB-Project/.venv/lib/python3.13/site-packages/urllib3/connectionpool.py"[0m, line [35m871[0m, in [35murlopen[0m
+    return [31mself.urlopen[0m[1;31m([0m
+           [31m~~~~~~~~~~~~[0m[1;31m^[0m
+        [1;31mmethod,[0m
+        [1;31m^^^^^^^[0m
+    ...<13 lines>...
+        [1;31m**response_kw,[0m
+        [1;31m^^^^^^^^^^^^^^[0m
+    [1;31m)[0m
+    [1;31m^[0m
+  File [35m"/home/paloli/Documentos/MDS/ADSDB/ADSDB-Project/.venv/lib/python3.13/site-packages/urllib3/connectionpool.py"[0m, line [35m871[0m, in [35murlopen[0m
+    return [31mself.urlopen[0m[1;31m([0m
+           [31m~~~~~~~~~~~~[0m[1;31m^[0m
+        [1;31mmethod,[0m
+        [1;31m^^^^^^^[0m
+    ...<13 lines>...
+        [1;31m**response_kw,[0m
+        [1;31m^^^^^^^^^^^^^^[0m
+    [1;31m)[0m
+    [1;31m^[0m
+  File [35m"/home/paloli/Documentos/MDS/ADSDB/ADSDB-Project/.venv/lib/python3.13/site-packages/urllib3/connectionpool.py"[0m, line [35m871[0m, in [35murlopen[0m
+    return [31mself.urlopen[0m[1;31m([0m
+           [31m~~~~~~~~~~~~[0m[1;31m^[0m
+        [1;31mmethod,[0m
+        [1;31m^^^^^^^[0m
+    ...<13 lines>...
+        [1;31m**response_kw,[0m
+        [1;31m^^^^^^^^^^^^^^[0m
+    [1;31m)[0m
+    [1;31m^[0m
+  [Previous line repeated 2 more times]
+  File [35m"/home/paloli/Documentos/MDS/ADSDB/ADSDB-Project/.venv/lib/python3.13/site-packages/urllib3/connectionpool.py"[0m, line [35m841[0m, in [35murlopen[0m
+    retries = retries.increment(
+        method, url, error=new_e, _pool=self, _stacktrace=sys.exc_info()[2]
+    )
+  File [35m"/home/paloli/Documentos/MDS/ADSDB/ADSDB-Project/.venv/lib/python3.13/site-packages/urllib3/util/retry.py"[0m, line [35m519[0m, in [35mincrement[0m
+    [1;31mraise MaxRetryError(_pool, url, reason) from reason[0m  # type: ignore[arg-type]
+    [1;31m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+[1;35murllib3.exceptions.MaxRetryError[0m: [35mHTTPConnectionPool(host='localhost', port=9000): Max retries exceeded with url: /landing-zone?location= (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7eff41744b90>: Failed to establish a new connection: [Errno 111] Connection refused'))[0m
+
+[INFO] Module finished with code 1 in 6.5s
+[OK]: landing-zone/temporal_landing/
+[OK]: landing-zone/persistent_landing/image_data/
+[OK]: landing-zone/persistent_landing/video_data/
+[OK]: landing-zone/persistent_landing/text_data/
+[OK]: formatted-zone/formatted/image_data/
+[OK]: formatted-zone/formatted/video_data/
+[OK]: formatted-zone/formatted/text_data/
+[OK]: trusted-zone/trusted/image_data/
+[OK]: trusted-zone/trusted/video_data/
+[OK]: trusted-zone/trusted/text_data/
+[OK]: rejected-zone/rejected/image_data/
+[OK]: rejected-zone/rejected/video_data/
+[OK]: rejected-zone/rejected/text_data/
+
+[INFO] Module finished with code 0 in 1.0s
+
+[INFO] Module finished with code 0 in 4.2s
+[OK]: landing-zone/temporal_landing/
+[OK]: landing-zone/persistent_landing/image_data/
+[OK]: landing-zone/persistent_landing/video_data/
+[OK]: landing-zone/persistent_landing/text_data/
+[OK]: formatted-zone/formatted/image_data/
+[OK]: formatted-zone/formatted/video_data/
+[OK]: formatted-zone/formatted/text_data/
+[OK]: trusted-zone/trusted/image_data/
+[OK]: trusted-zone/trusted/video_data/
+[OK]: trusted-zone/trusted/text_data/
+[OK]: rejected-zone/rejected/image_data/
+[OK]: rejected-zone/rejected/video_data/
+[OK]: rejected-zone/rejected/text_data/
+
+[INFO] Module finished with code 0 in 0.6s
+
+[INFO] Module finished with code 0 in 3.9s

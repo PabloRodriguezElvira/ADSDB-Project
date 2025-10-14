@@ -34,7 +34,6 @@ def upload_file_to_bucket(client: Minio, bucket: str, object_name: str, local_fi
         content_type=content_type,
         metadata=metadata,
     )
-    print(f"[OK] Subido {local_file} a s3://{bucket}/{object_name}")
 
 
 def upload_directory_images(client: Minio, bucket: str, folder: str, dataset_path: Path):
@@ -47,6 +46,8 @@ def upload_directory_images(client: Minio, bucket: str, folder: str, dataset_pat
     img_counter = 0
 
     for split_dir in dataset_path.iterdir():
+        print(f"Uploading images in {split_dir.name} folder")
+
         # Traverse subdirectories (evaluation, training, validation)
         for img_file in split_dir.rglob("*"):
             if not img_file.is_file():

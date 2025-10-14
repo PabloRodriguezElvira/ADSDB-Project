@@ -79,7 +79,6 @@ def move_object(client: Minio, move: ObjectMove):
     copy_source = CopySource(LANDING_BUCKET, move.source)
     client.copy_object(LANDING_BUCKET, move.destination, copy_source)
     client.remove_object(LANDING_BUCKET, move.source)
-    print(f"[OK] {move.source} -> {move.destination}")
 
 
 def main():
