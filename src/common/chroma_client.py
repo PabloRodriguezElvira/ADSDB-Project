@@ -4,7 +4,7 @@ import chromadb
 from chromadb.config import Settings
 from chromadb.utils import embedding_functions as ef
 
-DB_PATH = Path(os.getenv("DB_PATH", "exploitation_zone/chromadb")).expanduser().resolve() #Escoger el path
+DB_PATH = Path(os.getenv("DB_PATH", "embeddings/chromadb")).expanduser().resolve() #Escoger el path
 TEXT_COLLECTION  = os.getenv("TEXT_COLLECTION",  "texts_v1")
 IMAGE_COLLECTION = os.getenv("IMAGE_COLLECTION", "images_v1")
 TEXT_MODEL_NAME  = os.getenv("TEXT_MODEL_NAME", "sentence-transformers/all-MiniLM-L6-v2")

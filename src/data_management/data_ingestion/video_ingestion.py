@@ -12,7 +12,8 @@ from src.common.minio_client import get_minio_client
 PEXELS_API_KEY = os.getenv("PEXELS_API_KEY")
 PEXELS_VIDEO_SEARCH_URL = "https://api.pexels.com/videos/search"
 
-
+#TODO: Encapsular variables globales.
+#TODO: Añadir barra de progreso en data ingestion y landing zone.
 def pick_best_video_file(video_files: list) -> dict | None:
     """
     Select the most suitable video file from a Pexels video entry.

@@ -14,3 +14,6 @@ __pycache__/
 
 # Estructura de buckets de minIO
 data_MinIO/
+
+# Carpeta de embeddings
+embeddings/
