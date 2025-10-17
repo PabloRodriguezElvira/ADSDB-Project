@@ -4,6 +4,7 @@ import subprocess
 from pathlib import Path
 from datetime import datetime
 from zoneinfo import ZoneInfo
+import imageio_ffmpeg as ff
 from src.common.minio_client import get_minio_client
 from minio.error import S3Error
 
@@ -21,9 +22,10 @@ def list_objects(client, bucket, prefix):
             yield obj.object_name
 
 
-def transcode_to_mp4(in_path: str, out_path: str):
+def transcode_to_mp4(in_path, out_path):
+    ffmpeg_bin = ff.get_ffmpeg_exe()
     cmd = [
-        "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
+        ffmpeg_bin, "-y", "-hide_banner", "-loglevel", "error",
         "-i", in_path,
         "-c:v", "libx264", "-crf", "23", "-preset", "veryfast",
         "-pix_fmt", "yuv420p",
