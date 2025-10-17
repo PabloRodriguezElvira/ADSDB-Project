@@ -3,16 +3,25 @@ from zipfile import ZipFile
 from minio import Minio
 from minio.error import S3Error
 from src.common.minio_client import get_minio_client 
+from src.common.progressBar import ProgressBar
 from datetime import datetime
 from zoneinfo import ZoneInfo
 import kagglehub
 import mimetypes
+from typing import Optional
 
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tif", ".tiff", ".webp"}
 
 
-def upload_file_to_bucket(client: Minio, bucket: str, object_name: str, local_file: Path, img_type: str):
+def upload_file_to_bucket(
+    client: Minio,
+    bucket: str,
+    object_name: str,
+    local_file: Path,
+    img_type: str,
+    progress: Optional[ProgressBar] = None,
+):
     """
     Upload a single image file to the specified MinIO bucket.
     Adds data source, image type, and ingestion timestamp as metadata.
@@ -27,13 +36,31 @@ def upload_file_to_bucket(client: Minio, bucket: str, object_name: str, local_fi
     # Determine MIME type. This is a standard that indicates the type of content of a file.
     content_type, _ = mimetypes.guess_type(local_file.name)
 
-    client.fput_object(
-        bucket,
-        object_name,
-        str(local_file),
-        content_type=content_type,
-        metadata=metadata,
-    )
+    # Create the progress bar only if it has not been created before. It shows the uploading progress of all images. 
+    if progress is None:
+        file_size = local_file.stat().st_size
+
+        with ProgressBar(
+            total=file_size,
+            description=f"Uploading {local_file.name}",
+        ) as single_progress:
+            client.fput_object(
+                bucket,
+                object_name,
+                str(local_file),
+                content_type=content_type,
+                metadata=metadata,
+                progress=single_progress,
+            )
+    else:
+        client.fput_object(
+            bucket,
+            object_name,
+            str(local_file),
+            content_type=content_type,
+            metadata=metadata,
+            progress=progress,
+        )
 
 
 def upload_directory_images(client: Minio, bucket: str, folder: str, dataset_path: Path):
@@ -42,12 +69,11 @@ def upload_directory_images(client: Minio, bucket: str, folder: str, dataset_pat
     Generates unique object names based on image type, split (train/val/test), and image counter.
     """
 
-    some_image_uploaded = False
-    img_counter = 0
+    upload_queue = []
+    total_size = 0
 
+    # First pass: gather images and compute total size for aggregate progress
     for split_dir in dataset_path.iterdir():
-        print(f"Uploading images in {split_dir.name} folder")
-
         # Traverse subdirectories (evaluation, training, validation)
         for img_file in split_dir.rglob("*"):
             if not img_file.is_file():
@@ -55,13 +81,23 @@ def upload_directory_images(client: Minio, bucket: str, folder: str, dataset_pat
 
             if img_file.suffix.lower() in IMAGE_EXTENSIONS:
                 img_type = img_file.parent.name
-                img_name = f"{img_type}-{split_dir.name}-{img_counter}{img_file.suffix}"
-                object_name = f"{folder}/{img_name}"
-                upload_file_to_bucket(client, bucket, object_name, img_file, img_type)
-                img_counter += 1
-                some_image_uploaded = True
+                file_size = img_file.stat().st_size
+                upload_queue.append((split_dir.name, img_file, img_type, file_size))
+                total_size += file_size
 
-    return some_image_uploaded
+    if not upload_queue:
+        return False
+
+    with ProgressBar(
+        total=total_size,
+        description="Uploading image dataset",
+    ) as progress:
+        for idx, (split_name, img_file, img_type, _) in enumerate(upload_queue):
+            img_name = f"{img_type}-{split_name}-{idx}{img_file.suffix}"
+            object_name = f"{folder}/{img_name}"
+            upload_file_to_bucket(client, bucket, object_name, img_file, img_type, progress)
+
+    return True
 
 
 def main():
@@ -94,4 +130,3 @@ if __name__ == "__main__":
         main()
     except S3Error as e:
         print(f"Error MinIO: {e}")
-

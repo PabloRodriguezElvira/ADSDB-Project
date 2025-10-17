@@ -6,14 +6,15 @@ from minio import Minio
 from minio.error import S3Error
 from datetime import datetime
 from zoneinfo import ZoneInfo
+from typing import Optional
 from src.common.minio_client import get_minio_client
+from src.common.progressBar import ProgressBar
 
 # Config
 PEXELS_API_KEY = os.getenv("PEXELS_API_KEY")
 PEXELS_VIDEO_SEARCH_URL = "https://api.pexels.com/videos/search"
 
-#TODO: Encapsular variables globales.
-#TODO: Añadir barra de progreso en data ingestion y landing zone.
+#TODO: Encapsular variables globales
 def pick_best_video_file(video_files: list) -> dict | None:
     """
     Select the most suitable video file from a Pexels video entry.
@@ -58,7 +59,14 @@ def search_pexels_videos(query: str, videos_amount: int, per_page: int = 80):
     return results[:videos_amount]
 
 
-def upload_video_streaming(client: Minio, bucket: str, folder: str, filename: str, url: str) -> bool:
+def upload_video_streaming(
+    client: Minio,
+    bucket: str,
+    folder: str,
+    filename: str,
+    url: str,
+    progress: Optional[ProgressBar] = None,
+) -> bool:
     """
     Stream a remote video from Pexels directly into MinIO.
     If content length is known, stream directly; otherwise, buffer with BytesIO before uploading.
@@ -85,7 +93,6 @@ def upload_video_streaming(client: Minio, bucket: str, folder: str, filename: st
                 length=int(content_length),
                 metadata=metadata,
             )
-            print(f"[OK] Uploaded {url} to s3://{bucket}/{object_name}")
             return True
 
         # Otherwise, buffer the content in memory to determine its size.
@@ -96,7 +103,6 @@ def upload_video_streaming(client: Minio, bucket: str, folder: str, filename: st
 
         size = buffer.getbuffer().nbytes
         if size == 0:
-            print(f"[WARN] Empty download for {url}, skipping.")
             return False
 
         buffer.seek(0)
@@ -107,7 +113,7 @@ def upload_video_streaming(client: Minio, bucket: str, folder: str, filename: st
             length=size,
             metadata=metadata,
         )
-        print(f"[OK] Uploaded {url} to s3://{bucket}/{object_name}")
+
         return True
 
 
@@ -128,6 +134,8 @@ def main():
     videos = search_pexels_videos(query=query, videos_amount=videos_amount)
 
     uploaded_count = 0
+    upload_queue: list[tuple[str, str]] = []
+
     for video in videos:
         vid_id = video.get("id")
         best = pick_best_video_file(video.get("video_files", []))
@@ -138,7 +146,7 @@ def main():
         url = best.get("link")
         file_type = (best.get("file_type") or "").lower()
 
-        # Try to infer extension from MIME type or fallback to .mp4
+        # Try to infer extension from MIME type. If not, set default to .mp4
         if file_type.startswith("video/"):
             ext = f".{file_type.split('/', 1)[1]}"
         else:
@@ -149,17 +157,38 @@ def main():
         quality = best.get("quality") or "unknown"
         filename = f"pexels_{vid_id}_{quality}_{width}x{height}{ext}"
 
-        try:
-            print(f"[INFO] Uploading {url} as {filename}")
-            if upload_video_streaming(client, bucket, folder, filename, url):
-                uploaded_count += 1
-        except Exception as exc:
-            print(f"[ERROR] Direct upload failed for {url}: {exc}")
+        upload_queue.append((filename, url))
+
+    if not upload_queue:
+        print("[WARN] No videos were queued for upload to the temporal bucket.")
+        return
+
+    with ProgressBar(
+        total=len(upload_queue),
+        description="Uploading video dataset",
+        unit="video",
+        unit_scale=False,
+        unit_divisor=1,
+    ) as progress:
+        for filename, url in upload_queue:
+            progress.set_description(f"Uploading {filename}", refresh=True)
+            try:
+                if upload_video_streaming(
+                    client,
+                    bucket,
+                    folder,
+                    filename,
+                    url,
+                    progress,
+                ):
+                    uploaded_count += 1
+            except Exception as exc:
+                progress.write(f"[ERROR] Direct upload failed for {url}: {exc}")
+            finally:
+                progress.update(1)
 
     if uploaded_count == 0:
         print("[WARN] No videos were uploaded to the temporal bucket.")
-    else:
-        print(f"[OK] Uploaded {uploaded_count} videos to the temporal bucket.")
 
 
 if __name__ == "__main__":

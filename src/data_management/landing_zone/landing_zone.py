@@ -8,6 +8,7 @@ from minio.commonconfig import CopySource
 from minio.error import S3Error
 
 from src.common.minio_client import get_minio_client
+from src.common.progressBar import ProgressBar
 
 
 LANDING_BUCKET = "landing-zone"
@@ -87,16 +88,25 @@ def main():
     """
 
     client = get_minio_client()
-    moved = 0
+    objects_to_move = list(iter_objects_in_temporal_bucket(client))
 
-    for move in iter_objects_in_temporal_bucket(client):
-        move_object(client, move)
-        moved += 1
-
-    if moved == 0:
+    if not objects_to_move:
         print("[INFO] No objects found in temporal_landing to move.")
-    else:
-        print(f"[OK] Objects moved: {moved}")
+        return
+
+    with ProgressBar(
+        total=len(objects_to_move),
+        description="Moving landing objects",
+        unit="file",
+        unit_scale=False,
+        unit_divisor=1,
+    ) as progress:
+        for obj in objects_to_move:
+            progress.set_description(f"Moving {obj.source}", refresh=True)
+            move_object(client, obj)
+            progress.update(1)
+
+        progress.write(f"[OK] Objects moved: {len(objects_to_move)}")
 
 
 

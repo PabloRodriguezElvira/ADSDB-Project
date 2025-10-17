@@ -1,9 +1,10 @@
 from pathlib import Path
-from minio.error import S3Error
-from src.common.minio_client import get_minio_client
 import kagglehub
 from datetime import datetime
 from zoneinfo import ZoneInfo
+from minio.error import S3Error
+from src.common.minio_client import get_minio_client
+from src.common.progressBar import ProgressBar
 
 # Initialize the MinIO client using a helper function
 client = get_minio_client()
@@ -32,16 +33,21 @@ def upload_file_to_bucket(bucket: str, destination_object: str, json_file: Path)
         "x-amz-meta-ingested-at": datetime.now(ZoneInfo("Europe/Madrid")).isoformat(),
     }
 
-    # Upload the file to the given bucket and destination path
-    client.fput_object(
-        bucket,
-        destination_object,
-        str(json_file),
-        content_type="application/json",
-        metadata=metadata,
-    )    
+    file_size = json_file.stat().st_size
 
-    print(f"[OK] Uploaded {json_file} to s3://{bucket}/{destination_object}")
+    # Use an instance of our ProgressBar class to pass it to the MinIO client function fput_object.
+    with ProgressBar(
+        total=file_size,
+        description=f"Uploading {json_file.name}",
+    ) as progress:
+        client.fput_object(
+            bucket,
+            destination_object,
+            str(json_file),
+            content_type="application/json",
+            metadata=metadata,
+            progress=progress,
+        )
 
 
 def main():
