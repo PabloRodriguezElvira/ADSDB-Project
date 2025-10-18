@@ -5,6 +5,7 @@ import subprocess
 import json
 import hashlib
 import imageio_ffmpeg as ffmpeg
+import shutil
 from pathlib import Path
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -34,29 +35,41 @@ def dst_key_for(src_key: str, dst_prefix: str):
         dst_key = os.path.join(dst_prefix, os.path.basename(src_key))
     return dst_key
 
+
 def is_video_valid(file_path: str):
+    """Check if ffprobe can read the video file (basic integrity test)."""
     try:
-        # just check if ffprobe can read the video file (no duration check)
-        ffmpeg_path = ffmpeg.get_ffprobe_exe()
+        
+        ffprobe_path = shutil.which("ffprobe")
+        if not ffprobe_path:
+            raise FileNotFoundError(
+                "ffprobe not found. Install ffmpeg and make sure it's in your PATH."
+            )
+
         subprocess.run(
             [
-                ffmpeg_path, "-v", "error",
+                ffprobe_path, "-v", "error",
                 "-show_entries", "format=format_name",
                 "-of", "default=noprint_wrappers=1:nokey=1",
                 file_path
             ],
             stderr=subprocess.PIPE,  # capture errors if the video is corrupted
             text=True,               # decode output as text
-            check=True               # if ffprobe fails then error
+            check=True               # if ffprobe fails, raise CalledProcessError
         )
         return True  # ffprobe could read it, so it's valid
+
     except subprocess.CalledProcessError:
         # ffprobe failed (file not readable or corrupted)
         return False
 
-import shutil  # añade esto arriba del archivo
+    except FileNotFoundError as e:
+        print(f"[ERROR] {e}")
+        return False
+
 
 def video_properties(file_path: str):
+    """Extract duration, resolution, and codec info from a video using ffprobe."""
     result = {
         "duration": None,
         "width": None,
@@ -69,45 +82,36 @@ def video_properties(file_path: str):
     }
 
     try:
-        # 🔍 Intentar localizar ffprobe
         ffprobe_path = shutil.which("ffprobe")
-
         if not ffprobe_path:
             raise FileNotFoundError(
-                "ffprobe not found. Please install ffmpeg and make sure it's in your PATH."
+                "ffprobe not found. Install ffmpeg and make sure it's in your PATH."
             )
-
-        print(f"\n[DEBUG] Checking video: {os.path.basename(file_path)}")
-        print(f"[DEBUG] Using ffprobe: {ffprobe_path}")
 
         cmd = [
             ffprobe_path, "-v", "error",
             "-select_streams", "v:0",
-            "-show_entries", "stream=width,height,codec_name",
-            "-show_entries", "format=duration",
+            "-show_entries", "format=duration:stream=width,height,codec_name",
             "-of", "json",
             file_path
         ]
 
+        # Run ffprobe and capture JSON output
         process = subprocess.run(
             cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            text=True
+            text=True,
+            check=True
         )
 
-        print("[DEBUG CMD]", " ".join(cmd))
-        print("[DEBUG RAW STDOUT]\n", process.stdout)
-        print("[DEBUG RAW STDERR]\n", process.stderr)
+        info = json.loads(process.stdout or "{}")
 
-        if not process.stdout.strip():
-            raise RuntimeError("ffprobe did not return any data.")
-
-        info = json.loads(process.stdout)
-
+        # Extract duration
         duration = float(info.get("format", {}).get("duration", 0.0))
-        width, height, codec = 0, 0, ""
 
+        # Extract video stream info
+        width, height, codec = 0, 0, ""
         if "streams" in info and len(info["streams"]) > 0:
             first_stream = info["streams"][0]
             width = first_stream.get("width", 0)
@@ -119,25 +123,21 @@ def video_properties(file_path: str):
             "width": width,
             "height": height,
             "codec": codec,
-            "duration_ok": duration >= 1.0,
-            "resolution_ok": width >= 480 and height >= 360,
-            "codec_ok": codec in ("h264", "hevc", "vp9", "avc1", "mpeg4"),
+            # Validation
+            "duration_ok": duration > 1.0,  # video must last > 1s
+            "resolution_ok": width >= 480 and height >= 360,  # at least 480p
+            "codec_ok": codec in ("h264", "hevc", "vp9")  # accepted codecs
         })
 
-        print(f"[INFO] duration={duration:.2f}s | resolution={width}x{height} | codec={codec}")
-        print(f"[CHECKS] duration_ok={result['duration_ok']} | resolution_ok={result['resolution_ok']} | codec_ok={result['codec_ok']}")
-
-    except FileNotFoundError as e:
-        result["error"] = str(e)
-        print("[ERROR]", e)
+    except subprocess.CalledProcessError as e:
+        result["error"] = f"ffprobe failed: {e}"
     except json.JSONDecodeError:
-        result["error"] = "Invalid JSON output from ffprobe"
-        print("[ERROR] Invalid JSON output from ffprobe")
+        result["error"] = "Invalid ffprobe JSON output"
     except Exception as e:
         result["error"] = str(e)
-        print(f"[ERROR] while analyzing {file_path}: {e}")
-
+    #print(f"[DEBUG RESULT] {file_path} → {json.dumps(result, indent=2)}")
     return result
+
 def duplicates(videos: dict):
     md5_seen = {}
     duplicates = []
@@ -207,7 +207,7 @@ def process_videos(client):
         metadata = {
             "x-amz-meta-source-key": name,
             "x-amz-meta-processed-at": datetime.now(ZoneInfo("Europe/Madrid")).isoformat(),
-            "x-amz-meta-format": "mp4(h264)",
+            "x-amz-meta-format": "mp4(h264/acc)",
         }
 
         with open(temp_path, "rb") as f:
