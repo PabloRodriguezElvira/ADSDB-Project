@@ -5,16 +5,11 @@ from pathlib import Path
 from datetime import datetime
 from zoneinfo import ZoneInfo
 import imageio_ffmpeg as ff
+
 from src.common.minio_client import get_minio_client
 from minio.error import S3Error
+import src.common.global_variables as config
 
-# Buckets
-LANDING_BUCKET = "landing-zone"
-FORMATTED_BUCKET = "formatted-zone"
-
-# Folders
-SRC_PREFIX = "persistent_landing/video_data/"
-DST_PREFIX = "formatted/video_data/"
 
 def list_objects(client, bucket, prefix):
     for obj in client.list_objects(bucket, prefix=prefix, recursive=True):
@@ -36,10 +31,10 @@ def transcode_to_mp4(in_path, out_path):
     subprocess.run(cmd, check=True)
 
 def dst_key_for(src_key: str) -> str:
-    if src_key.startswith(SRC_PREFIX):
-        dst_key = src_key.replace(SRC_PREFIX, DST_PREFIX, 1)
+    if src_key.startswith(config.LANDING_VIDEO_PATH):
+        dst_key = src_key.replace(config.LANDING_VIDEO_PATH, config.FORMATTED_VIDEO_PATH, 1)
     else:
-        dst_key = DST_PREFIX + os.path.basename(src_key)
+        dst_key = config.FORMATTED_VIDEO_PATH + os.path.basename(src_key)
     base, _ = os.path.splitext(dst_key)
     return base + ".mp4"
 
@@ -52,7 +47,7 @@ def process_video(client, key: str):
         out_path = os.path.join(tmp, "out.mp4")
 
         # Download
-        obj = client.get_object(LANDING_BUCKET, key)
+        obj = client.get_object(config.LANDING_BUCKET, key)
         with open(in_path, "wb") as f:
             f.write(obj.read())
         obj.close(); obj.release_conn()
@@ -70,19 +65,19 @@ def process_video(client, key: str):
         }
         with open(out_path, "rb") as f:
             client.put_object(
-                FORMATTED_BUCKET,
+                config.FORMATTED_BUCKET,
                 dst_key,
                 data=f,
                 length=size,
                 content_type="video/mp4",
                 metadata = metadata
             )
-        print(f"Saved: {FORMATTED_BUCKET}/{dst_key}")
+        print(f"Saved: {config.FORMATTED_BUCKET}/{dst_key}")
 
 def main():
     
     client = get_minio_client()
-    for key in list_objects(client, LANDING_BUCKET, SRC_PREFIX):
+    for key in list_objects(client, config.LANDING_BUCKET, config.LANDING_VIDEO_PATH):
         try:
             process_video(client, key)
         except S3Error as e:

@@ -7,15 +7,21 @@ from minio.error import S3Error
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from typing import Optional
+
 from src.common.minio_client import get_minio_client
 from src.common.progressBar import ProgressBar
+import src.common.global_variables as config
 
 # Config
 PEXELS_API_KEY = os.getenv("PEXELS_API_KEY")
 PEXELS_VIDEO_SEARCH_URL = "https://api.pexels.com/videos/search"
 
-#TODO: Encapsular variables globales
-def pick_best_video_file(video_files: list) -> dict | None:
+#TODO: Encapsular variables globales -> Formatted zone hecha, seguir por Trusted.
+#TODO: Poner limite de imagenes en ingestion_images
+#TODO: Barra de progreso en trusted zone y formatted zone
+#TODO: Retocar orchestrator
+#TODO: Task1 Multimodal Tasks
+def pick_best_video_file(video_files: list):
     """
     Select the most suitable video file from a Pexels video entry.
     Prefer HD (≤1080p) files; otherwise, choose the file with the largest width/bitrate.
@@ -25,6 +31,7 @@ def pick_best_video_file(video_files: list) -> dict | None:
         return None
 
     hd_candidates = [vf for vf in video_files if vf.get("quality") == "hd" and vf.get("width", 0) <= 1920]
+
     if hd_candidates:
         return max(hd_candidates, key=lambda v: v.get("bitrate", 0) or v.get("width", 0))
 
@@ -66,13 +73,13 @@ def upload_video_streaming(
     filename: str,
     url: str,
     progress: Optional[ProgressBar] = None,
-) -> bool:
+):
     """
     Stream a remote video from Pexels directly into MinIO.
     If content length is known, stream directly; otherwise, buffer with BytesIO before uploading.
     """
 
-    object_name = f"{folder}/{filename}"
+    object_name = f"{folder}{filename}"
 
     with requests.get(url, stream=True, timeout=60) as response:
         response.raise_for_status()
@@ -125,8 +132,6 @@ def main():
     
     query = "healthy food cooking"
     videos_amount = 3
-    bucket = "landing-zone"
-    folder = "temporal_landing"
 
     client = get_minio_client()
 
@@ -175,8 +180,8 @@ def main():
             try:
                 if upload_video_streaming(
                     client,
-                    bucket,
-                    folder,
+                    config.LANDING_BUCKET,
+                    config.LANDING_TEMPORAL_PATH,
                     filename,
                     url,
                     progress,

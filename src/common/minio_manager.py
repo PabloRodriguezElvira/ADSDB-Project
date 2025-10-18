@@ -2,42 +2,10 @@ from io import BytesIO
 from minio import Minio
 from minio.error import S3Error
 from src.common.minio_client import get_minio_client
+import src.common.global_variables as config
 
 # Localhost MinIO client
 client = get_minio_client()
-
-# Define all the zones and the sub-folders inside them.
-
-LANDING_BUCKET = "landing-zone"
-FORMATTED_BUCKET = "formatted-zone"
-TRUSTED_BUCKET = "trusted-zone"
-REJECTED_BUCKET = "rejected-zone"
-
-
-LANDING_FOLDERS = [
-    "temporal_landing/",
-    "persistent_landing/image_data/",
-    "persistent_landing/video_data/",
-    "persistent_landing/text_data/",
-]
-
-FORMATTED_FOLDERS = [
-    "formatted/image_data/",
-    "formatted/video_data/",
-    "formatted/text_data/",
-]
-
-TRUSTED_FOLDERS = [
-    "trusted/image_data/",
-    "trusted/video_data/",
-    "trusted/text_data/",
-]
-
-REJECTED_FOLDERS = [
-    "rejected/image_data/",
-    "rejected/video_data/",
-    "rejected/text_data/",
-]
 
 def create_bucket(bucket: str):
     """
@@ -74,28 +42,28 @@ def main():
     """
 
     # Create landing bucket
-    create_bucket(LANDING_BUCKET)
-    for f in LANDING_FOLDERS:
-        create_folder(LANDING_BUCKET, f)
-        print(f"[OK]: {LANDING_BUCKET}/{f}")
+    create_bucket(config.LANDING_BUCKET)
+    for f in config.LANDING_FOLDERS:
+        create_folder(config.LANDING_BUCKET, f)
+        print(f"[OK]: {config.LANDING_BUCKET}/{f}")
 
     # Create formatted bucket
-    create_bucket(FORMATTED_BUCKET)
-    for f in FORMATTED_FOLDERS:
-        create_folder(FORMATTED_BUCKET, f)
-        print(f"[OK]: {FORMATTED_BUCKET}/{f}")
+    create_bucket(config.FORMATTED_BUCKET)
+    for f in config.FORMATTED_FOLDERS:
+        create_folder(config.FORMATTED_BUCKET, f)
+        print(f"[OK]: {config.FORMATTED_BUCKET}/{f}")
 
     # Create trusted bucket
-    create_bucket(TRUSTED_BUCKET)
-    for f in TRUSTED_FOLDERS:
-        create_folder(TRUSTED_BUCKET, f)
-        print(f"[OK]: {TRUSTED_BUCKET}/{f}")
+    create_bucket(config.TRUSTED_BUCKET)
+    for f in config.TRUSTED_FOLDERS:
+        create_folder(config.TRUSTED_BUCKET, f)
+        print(f"[OK]: {config.TRUSTED_BUCKET}/{f}")
 
     # Create rejected bucket
-    create_bucket(REJECTED_BUCKET)
-    for f in REJECTED_FOLDERS:
-        create_folder(REJECTED_BUCKET, f)
-        print(f"[OK]: {REJECTED_BUCKET}/{f}")
+    create_bucket(config.REJECTED_BUCKET)
+    for f in config.REJECTED_FOLDERS:
+        create_folder(config.REJECTED_BUCKET, f)
+        print(f"[OK]: {config.REJECTED_BUCKET}/{f}")
 
 
 if __name__ == "__main__":
