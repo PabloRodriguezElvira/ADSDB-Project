@@ -79,7 +79,7 @@ def image_properties(data: bytes, expected_size=(512, 512)):
 
     return result
 
-# Image properties such as brightness
+# Image properties
 def brightness_and_contrast(data: bytes):
     img = Image.open(io.BytesIO(data)).convert("L")  # grey's scale
     stat = ImageStat.Stat(img)# create an object with images features
@@ -95,7 +95,7 @@ def brightness_and_contrast(data: bytes):
     }
 
 # Function to combine above functions
-def validate_images(images: dict) -> dict:
+def validate_images(images: dict):
 
     valid_images = {}
     invalid_images = {}
@@ -160,17 +160,6 @@ def duplicates(images: dict):# check if we have copy paste functions per group
             "duplicates": duplicates,
             "unique_count": unique_count # how many unique images we have
         }
-
-        print(f"\n {split.upper()}")
-        print(f"Total images: {len(subset)}")
-        print(f"Exact duplicates: {len(duplicates)}")
-
-        if duplicates:
-            print("Duplicate images:")
-            for a, b in duplicates:
-                print(f" {a} == {b}")
-        else:
-            print("No duplicates")
     return results
 
 def count_images_by_food(images: dict):
@@ -198,7 +187,6 @@ def count_images_by_food(images: dict):
         food = re.split(r"-(training|validation|evaluation)-", base, flags=re.IGNORECASE)[0]
         food = food.replace(".png", "").capitalize()
 
-        # Sumamos al contador
         counts[group][food] = counts[group].get(food, 0) + 1
 
     return counts
@@ -221,28 +209,30 @@ def process_images(client):
 
     # Upload not duplicate and valid images and we uploaded to trusted zone
     uploaded_trusted = 0
-    for name, data in valid_images.items():
-        # Check if there are duplicate images
-        if any(name == dup for group in duplicates_report.values()
-               for dup, _ in group["duplicates"]):
-            continue
+    if valid_images:
+        print("\n Uploading valid images")
+        for name, data in valid_images.items():
+            # Check if there are duplicate images
+            if any(name == dup for group in duplicates_report.values()
+                for dup, _ in group["duplicates"]):
+                continue
 
-        dst_key = dst_key_for(name,DST1_PREFIX)
-        metadata = {
-            "x-amz-meta-source-key": name,
-            "x-amz-meta-processed-at": datetime.now(ZoneInfo("Europe/Madrid")).isoformat(),
-            "x-amz-meta-format": "png",
-        }
-        client.put_object(
-            TRUSTED_BUCKET,
-            dst_key,
-            io.BytesIO(data),
-            length=len(data),
-            content_type="image/png",
-            metadata=metadata
-        )
-        uploaded_trusted += 1
-        print(f" Uploaded to Trusted: {dst_key}")
+            dst_key = dst_key_for(name,DST1_PREFIX)
+            metadata = {
+                "x-amz-meta-source-key": name,
+                "x-amz-meta-processed-at": datetime.now(ZoneInfo("Europe/Madrid")).isoformat(),
+                "x-amz-meta-format": "png",
+            }
+            client.put_object(
+                TRUSTED_BUCKET,
+                dst_key,
+                io.BytesIO(data),
+                length=len(data),
+                content_type="image/png",
+                metadata=metadata
+            )
+            uploaded_trusted += 1
+            print(f" Uploaded to Trusted: {dst_key}")
 
     # Upload rejected images to the rejected-zone
     uploaded_rejected = 0

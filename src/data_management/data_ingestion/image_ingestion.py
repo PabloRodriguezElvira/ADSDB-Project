@@ -109,7 +109,9 @@ def main():
     client = get_minio_client()
 
     path = kagglehub.dataset_download("trolukovich/food11-image-dataset")
+    print(path)
     dataset_path = Path(path)
+    
 
     bucket = "landing-zone"
     folder = "temporal_landing"

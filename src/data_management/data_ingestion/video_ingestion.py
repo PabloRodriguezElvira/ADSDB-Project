@@ -12,6 +12,7 @@ from src.common.progressBar import ProgressBar
 
 # Config
 PEXELS_API_KEY = os.getenv("PEXELS_API_KEY")
+print(PEXELS_API_KEY)
 PEXELS_VIDEO_SEARCH_URL = "https://api.pexels.com/videos/search"
 
 #TODO: Encapsular variables globales
