@@ -16,6 +16,8 @@ def list_objects(client, bucket, prefix):
     for obj in client.list_objects(bucket, prefix=prefix, recursive=True):
         if not obj.object_name.endswith("/"):
             yield obj.object_name
+
+
 def transcode_to_mp4(in_path, out_path):
     ffmpeg_bin = ff.get_ffmpeg_exe()
     cmd = [
@@ -29,6 +31,7 @@ def transcode_to_mp4(in_path, out_path):
     ]
     subprocess.run(cmd, check=True)
 
+
 def dst_key_for(src_key: str) -> str:
     if src_key.startswith(config.LANDING_VIDEO_PATH):
         dst_key = src_key.replace(config.LANDING_VIDEO_PATH, config.FORMATTED_VIDEO_PATH, 1)
@@ -36,6 +39,7 @@ def dst_key_for(src_key: str) -> str:
         dst_key = config.FORMATTED_VIDEO_PATH + os.path.basename(src_key)
     base, _ = os.path.splitext(dst_key)
     return base + ".mp4"
+
 
 def process_video(client, key: str):
     ext = Path(key).suffix.lower()

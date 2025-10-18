@@ -4,24 +4,17 @@ import re
 import argparse
 from datetime import datetime
 from zoneinfo import ZoneInfo
-from src.common.minio_client import get_minio_client
 from minio.error import S3Error
 from PIL import Image, ImageStat, UnidentifiedImageError
 import cv2
 import numpy as np
 import hashlib
 from collections import defaultdict
-#import warnings
-#warnings.filterwarnings("ignore", category=UserWarning)
 
-# Buckets
-FORMATTED_BUCKET = "formatted-zone"
-TRUSTED_BUCKET = "trusted-zone"
-REJECTED_BUCKET = "rejected-zone"
-# Folders
-SRC_PREFIX = "formatted/image_data/"
-DST1_PREFIX = "trusted/image_data/"
-DST2_PREFIX = "rejected/image_data/"
+from src.common.minio_client import get_minio_client
+import src.common.global_variables as config
+
+
 
 def list_objects(client, bucket, prefix):
     for obj in client.list_objects(bucket, prefix=prefix, recursive=True):
@@ -29,8 +22,8 @@ def list_objects(client, bucket, prefix):
             yield obj.object_name
 
 def dst_key_for(src_key: str, dst_prefix: str):
-    if src_key.startswith(SRC_PREFIX):
-        dst_key = src_key.replace(SRC_PREFIX, dst_prefix, 1)
+    if src_key.startswith(config.FORMATTED_IMAGE_PATH):
+        dst_key = src_key.replace(config.FORMATTED_IMAGE_PATH, dst_prefix, 1)
     else:
         dst_key = os.path.join(dst_prefix, os.path.basename(src_key))
     return dst_key
@@ -193,8 +186,8 @@ def count_images_by_food(images: dict):
 
 def process_images(client):
     all_images = {}
-    for key in list_objects(client, FORMATTED_BUCKET, SRC_PREFIX):
-        obj = client.get_object(FORMATTED_BUCKET, key)
+    for key in list_objects(client, config.FORMATTED_BUCKET, config.FORMATTED_IMAGE_PATH):
+        obj = client.get_object(config.FORMATTED_BUCKET, key)
         data = obj.read()
         obj.close(); obj.release_conn()
         all_images[key] = data
@@ -217,14 +210,14 @@ def process_images(client):
                 for dup, _ in group["duplicates"]):
                 continue
 
-            dst_key = dst_key_for(name,DST1_PREFIX)
+            dst_key = dst_key_for(name,config.TRUSTED_IMAGE_PATH)
             metadata = {
                 "x-amz-meta-source-key": name,
                 "x-amz-meta-processed-at": datetime.now(ZoneInfo("Europe/Madrid")).isoformat(),
                 "x-amz-meta-format": "png",
             }
             client.put_object(
-                TRUSTED_BUCKET,
+                config.TRUSTED_BUCKET,
                 dst_key,
                 io.BytesIO(data),
                 length=len(data),
@@ -242,14 +235,14 @@ def process_images(client):
         print("\n Uploading rejected images")
         for name, reason in invalid_images.items():
             data = all_images[name]
-            dst_key = dst_key_for(name, DST2_PREFIX)
+            dst_key = dst_key_for(name, config.REJECTED_IMAGE_PATH)
             metadata = {
                 "x-amz-meta-source-key": name,
                 "x-amz-meta-reason": reason,
                 "x-amz-meta-processed-at": datetime.now(ZoneInfo("Europe/Madrid")).isoformat(),
             }
             client.put_object(
-                REJECTED_BUCKET,
+                config.REJECTED_BUCKET,
                 dst_key,
                 io.BytesIO(data),
                 length=len(data),

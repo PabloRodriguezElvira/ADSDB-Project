@@ -14,9 +14,9 @@ TRUSTED_IMAGE_PATH = "trusted/image_data/"
 TRUSTED_VIDEO_PATH = "trusted/video_data/"
 TRUSTED_TEXT_PATH = "trusted/text_data/"
 
-REJECTED_IMAGE_PATH = "rejected/image_data"
-REJECTED_VIDEO_PATH = "rejected/video_data"
-REJECTED_TEXT_PATH = "rejected/text_data"
+REJECTED_IMAGE_PATH = "rejected/image_data/"
+REJECTED_VIDEO_PATH = "rejected/video_data/"
+REJECTED_TEXT_PATH = "rejected/text_data/"
 
 LANDING_TEMPORAL_PATH = "temporal_landing/"
 LANDING_IMAGE_PATH = "persistent_landing/image_data/"
@@ -55,3 +55,4 @@ REJECTED_FOLDERS = [
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tif", ".tiff", ".webp"}
 VIDEO_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv", ".webm", ".flv", ".wmv"}
 TEXT_EXTENSIONS = {".json", ".txt"}
+JSON_NAME = "full_format_recipes.json"

@@ -9,19 +9,11 @@ import shutil
 from pathlib import Path
 from datetime import datetime
 from zoneinfo import ZoneInfo
-from src.common.minio_client import get_minio_client
 from minio.error import S3Error
 
+from src.common.minio_client import get_minio_client
+import src.common.global_variables as config
 
-# Buckets
-FORMATTED_BUCKET = "formatted-zone"
-TRUSTED_BUCKET = "trusted-zone"
-REJECTED_BUCKET = "rejected-zone"
-
-# Folders
-SRC_PREFIX = "formatted/video_data/"
-DST_PREFIX1 = "trusted/video_data/"
-DST_PREFIX2 = "rejected/video_data/"
 
 def list_objects(client, bucket, prefix):
     for obj in client.list_objects(bucket, prefix=prefix, recursive=True):
@@ -29,8 +21,8 @@ def list_objects(client, bucket, prefix):
             yield obj.object_name
 
 def dst_key_for(src_key: str, dst_prefix: str):
-    if src_key.startswith(SRC_PREFIX):
-        dst_key = src_key.replace(SRC_PREFIX, dst_prefix, 1)
+    if src_key.startswith(config.FORMATTED_VIDEO_PATH):
+        dst_key = src_key.replace(config.FORMATTED_VIDEO_PATH, dst_prefix, 1)
     else:
         dst_key = os.path.join(dst_prefix, os.path.basename(src_key))
     return dst_key
@@ -155,9 +147,9 @@ def duplicates(videos: dict):
 
 def process_videos(client):
     all_videos = {}
-    for obj in client.list_objects(FORMATTED_BUCKET, prefix=SRC_PREFIX, recursive=True):
+    for obj in client.list_objects(config.FORMATTED_BUCKET, prefix=config.FORMATTED_VIDEO_PATH, recursive=True):
         if not obj.object_name.endswith("/"):
-            file_obj = client.get_object(FORMATTED_BUCKET, obj.object_name)
+            file_obj = client.get_object(config.FORMATTED_BUCKET, obj.object_name)
             data = file_obj.read()
             file_obj.close()
             file_obj.release_conn()
@@ -202,7 +194,7 @@ def process_videos(client):
             tmp.write(data)
             temp_path = tmp.name
 
-        dst_key = dst_key_for(name, DST_PREFIX1)
+        dst_key = dst_key_for(name, config.TRUSTED_VIDEO_PATH)
         size = os.path.getsize(temp_path)
         metadata = {
             "x-amz-meta-source-key": name,
@@ -212,7 +204,7 @@ def process_videos(client):
 
         with open(temp_path, "rb") as f:
             client.put_object(
-                TRUSTED_BUCKET,
+                config.TRUSTED_BUCKET,
                 dst_key,
                 data=f,
                 length=size,
@@ -234,7 +226,7 @@ def process_videos(client):
                 tmp.write(data)
                 temp_path = tmp.name
 
-            dst_key = dst_key_for(name, DST_PREFIX2)
+            dst_key = dst_key_for(name, config.REJECTED_VIDEO_PATH)
             size = os.path.getsize(temp_path)
             metadata = {
                 "x-amz-meta-source-key": name,
@@ -244,7 +236,7 @@ def process_videos(client):
 
             with open(temp_path, "rb") as f:
                 client.put_object(
-                    REJECTED_BUCKET,
+                    config.REJECTED_BUCKET,
                     dst_key,
                     data=f,
                     length=size,

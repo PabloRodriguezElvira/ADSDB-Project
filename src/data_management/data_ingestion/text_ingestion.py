@@ -63,7 +63,7 @@ def main():
     dataset_path = kagglehub.dataset_download("hugodarwood/epirecipes")
 
     # Define target bucket and locate the JSON file
-    json_file = get_json_file_from_folder(dataset_path, "full_format_recipes.json")
+    json_file = get_json_file_from_folder(dataset_path, config.JSON_NAME)
 
     # Define destination path inside the bucket
     destination_object = f"{config.LANDING_TEMPORAL_PATH}{json_file.name}"

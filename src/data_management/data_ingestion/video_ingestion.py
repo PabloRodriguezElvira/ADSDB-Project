@@ -17,11 +17,7 @@ PEXELS_API_KEY = os.getenv("PEXELS_API_KEY")
 print(PEXELS_API_KEY)
 PEXELS_VIDEO_SEARCH_URL = "https://api.pexels.com/videos/search"
 
-#TODO: Encapsular variables globales -> Formatted zone hecha, seguir por Trusted.
-#TODO: Poner limite de imagenes en ingestion_images
-#TODO: Barra de progreso en trusted zone y formatted zone
-#TODO: Retocar orchestrator
-#TODO: Task1 Multimodal Tasks
+
 def pick_best_video_file(video_files: list):
     """
     Select the most suitable video file from a Pexels video entry.
