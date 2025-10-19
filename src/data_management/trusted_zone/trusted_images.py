@@ -18,12 +18,14 @@ def list_objects(client, bucket, prefix) -> Iterable[str]:
         if not obj.object_name.endswith("/"):
             yield obj.object_name
 
+
 def dst_key_for(src_key: str, dst_prefix: str):
     if src_key.startswith(config.FORMATTED_IMAGE_PATH):
         dst_key = src_key.replace(config.FORMATTED_IMAGE_PATH, dst_prefix, 1)
     else:
         dst_key = os.path.join(dst_prefix, os.path.basename(src_key))
     return dst_key
+
 
 # checking out if we are able to open all the images
 def is_image_valid(data: bytes):
@@ -33,18 +35,18 @@ def is_image_valid(data: bytes):
         return True
     except (UnidentifiedImageError, OSError):
         return False
-    
+
+
 # check image properties
 def image_properties(data: bytes, expected_size=(512, 512)):
     result = {
-
         "format": None,
         "size": None,
         "color": None,
         "size_ok": False,
         "color_ok": False,
         "format_ok": False,
-        "error": None
+        "error": None,
     }
     # let's check if the images meet the expected characteristics
     try:
@@ -69,24 +71,24 @@ def image_properties(data: bytes, expected_size=(512, 512)):
 
     return result
 
+
 # Image properties
 def brightness_and_contrast(data: bytes):
-    img = Image.open(io.BytesIO(data)).convert("L")  # grey's scale
-    stat = ImageStat.Stat(img)# create an object with images features
-    # we get the average from all the pixels  [0] and we standarize (from 0 to 1)
-    brightness = stat.mean[0] / 255.0  
-    contrast= stat.stddev[0] / 255.0  
+    img = Image.open(io.BytesIO(data)).convert("L")  # grey scale
+    stat = ImageStat.Stat(img)  # create an object with image features
+    brightness = stat.mean[0] / 255.0  # normalized mean brightness
+    contrast = stat.stddev[0] / 255.0  # normalized contrast
 
     return {
         "brightness": round(brightness, 3),
         "contrast": round(contrast, 3),
         "brightness_ok": 0.2 <= brightness <= 0.8,
-        "contrast_ok": contrast >= 0.2
+        "contrast_ok": contrast >= 0.2,
     }
 
-# Function to combine above functions
-def validate_images(images: dict):
 
+# Combine validation functions
+def validate_images(images: dict):
     valid_images = {}
     invalid_images = {}
 
@@ -97,7 +99,6 @@ def validate_images(images: dict):
 
         props = image_properties(data)
         bright = brightness_and_contrast(data)
-        
 
         if (
             props["size_ok"]
@@ -124,62 +125,41 @@ def validate_images(images: dict):
     return {"valid": valid_images, "invalid": invalid_images}
 
 
-def duplicates(images: dict):# check if we have copy paste functions per group
-    groups = {"training": {}, "validation": {}, "evaluation": {}}# create a dictionary to put the images
+def duplicates(images: dict):
+    
+    md5_map = {}# md5:name of unique images
+    duplicates = []# the names of the images in which its hash is already in md5_map
+    hashes = {}# names of name:hash 
 
-    for name, data in images.items():# we insert the name and bytes of the image 
-        lname = name.lower()
-        if "-training-" in lname:
-            groups["training"][name] = data
-        elif "-validation-" in lname:
-            groups["validation"][name] = data
-        elif "-evaluation-" in lname:
-            groups["evaluation"][name] = data
-    results = {}
+    for name, data in images.items():
+        md5 = hashlib.md5(data).hexdigest()
+        hashes[name] = md5
 
-    for split, subset in groups.items():# subset is the dict with name and data of every group
-        md5_dup = {}
-        duplicates = []# keep the name of the duplicate images
-        for name, data in subset.items():
-            md5 = hashlib.md5(data).hexdigest()# check duplicates per group
-            if md5 in md5_dup:
-                duplicates.append((name, md5_dup[md5]))# the current image and which is in the dict md5_dup
-            else:
-                md5_dup[md5] = name
-        unique_count = len(subset) - len(set([a for a, _ in duplicates]))
-        results[split] = {
-            "duplicates": duplicates,
-            "unique_count": unique_count # how many unique images we have
-        }
-    return results
+        if md5 in md5_map:
+            duplicates.append(name)
+        else:
+            md5_map[md5] = name
+
+    unique_count = len(images) - len(duplicates)
+
+    return {
+        "duplicates": duplicates,
+        "unique_count": unique_count,
+        "hashes": hashes,
+    }
 
 
 def count_images_by_food(images: dict):
-    counts = {
-        "training": {},
-        "validation": {},
-        "evaluation": {},
-    }
-
+    counts = {}
     for name in images.keys():
-        lname = name.lower()
-
-        # Detect the group
-        if "-training-" in lname:
-            group = "training"
-        elif "-validation-" in lname:
-            group = "validation"
-        elif "-evaluation-" in lname:
-            group = "evaluation"
-        else:
-            continue
-
-        # Extract the food name before the group
         base = os.path.basename(name)
-        food = re.split(r"-(training|validation|evaluation)-", base, flags=re.IGNORECASE)[0]
-        food = food.replace(".png", "").capitalize()
+        food = re.sub(
+            r"-(training|validation|evaluation)-", "-", base, flags=re.IGNORECASE
+        )
+        food = re.sub(r"\.png$", "", food, flags=re.IGNORECASE)
+        food = food.replace("-", " ").strip().capitalize()
 
-        counts[group][food] = counts[group].get(food, 0) + 1
+        counts[food] = counts.get(food, 0) + 1
 
     return counts
 
@@ -209,23 +189,21 @@ def process_images(client):
             all_images[key] = data
             progress.update(1)
 
-    # Validating images
+    # Validate images
     validated = validate_images(all_images)
     valid_images = validated["valid"]
     invalid_images = validated["invalid"]
 
-    # Duplicates only to valid images
+    # Detect duplicates in the valid images
     duplicates_report = duplicates(valid_images)
+    duplicate_names = set(duplicates_report["duplicates"])
 
-    # Upload not duplicate and valid images and we uploaded to trusted zone
     uploaded_trusted = 0
-    if valid_images:
-        duplicate_names = {
-            dup
-            for group in duplicates_report.values()
-            for dup, _ in group["duplicates"]
-        }
+    uploaded_rejected = 0
+    rejected_report = {}
 
+    # Upload valid and non-duplicate images to trusted
+    if valid_images:
         with ProgressBar(
             total=len(valid_images),
             description="Uploading trusted images",
@@ -255,10 +233,6 @@ def process_images(client):
                 )
                 uploaded_trusted += 1
                 progress.update(1)
-
-    # Upload rejected images to the rejected-zone
-    uploaded_rejected = 0
-    rejected_report = {}
 
     if invalid_images:
         with ProgressBar(
@@ -292,9 +266,7 @@ def process_images(client):
 
         print("\nREJECTION REPORT")
         for reason, files in rejected_report.items():
-            count = len(files)
-            print(f" - {reason}: {count} image(s) rejected")
-
+            print(f" - {reason}: {len(files)} image(s) rejected")
     else:
         print("\nNo rejected images.")
 
@@ -303,14 +275,13 @@ def process_images(client):
 
     # Report of the amount of types of images we have in the trusted bucket per group
     food_counts = count_images_by_food(valid_images)
-    print("\n Validated images per group")
-    for group, foods in food_counts.items():
-        print(f"\n {group.upper()}")
-        if not foods:
-            print("No images found")
-        else:
-            for food, count in sorted(foods.items()):
-                print(f" {food}: {count}")
+    print("\n Validated images per food type:")
+    if not food_counts:
+        print("No valid images found.")
+    else:
+        for food, count in sorted(food_counts.items()):
+            print(f" - {food}: {count}")
+
 
 def main():
     try:
@@ -320,6 +291,7 @@ def main():
         print(f"MinIO error: {e}")
     except Exception as e:
         print(f"Unexpected error: {e}")
+
 
 if __name__ == "__main__":
     main()
