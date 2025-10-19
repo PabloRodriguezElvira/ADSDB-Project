@@ -4,16 +4,11 @@ import argparse
 from PIL import Image, ImageOps
 from datetime import datetime
 from zoneinfo import ZoneInfo
-from src.common.minio_client import get_minio_client
 from minio.error import S3Error
 
-# Buckets
-LANDING_BUCKET = "landing-zone"
-FORMATTED_BUCKET = "formatted-zone"
+from src.common.minio_client import get_minio_client
+import src.common.global_variables as config
 
-# Folders
-SRC_PREFIX = "persistent_landing/image_data/"
-DST_PREFIX = "formatted/image_data/"
 
 def list_objects(client, bucket, prefix):
     for obj in client.list_objects(bucket, prefix=prefix, recursive=True):
@@ -39,10 +34,10 @@ def convert_to_png(data: bytes, size=(512, 512)) -> bytes:
 
 
 def dst_key_for(src_key: str) -> str:
-    if src_key.startswith(SRC_PREFIX):
-        dst_key = src_key.replace(SRC_PREFIX, DST_PREFIX, 1)
+    if src_key.startswith(config.LANDING_IMAGE_PATH):
+        dst_key = src_key.replace(config.LANDING_IMAGE_PATH, config.FORMATTED_IMAGE_PATH, 1)
     else:
-        dst_key = DST_PREFIX + os.path.basename(src_key)
+        dst_key = config.FORMATTED_IMAGE_PATH + os.path.basename(src_key)
     base, _ = os.path.splitext(dst_key)
     return base + ".png"
 
@@ -50,7 +45,7 @@ def process_image(client, key: str, size=(512, 512)):
     print("Processing:", key)
 
     # Download
-    obj = client.get_object(LANDING_BUCKET, key)
+    obj = client.get_object(config.LANDING_BUCKET, key)
     data = obj.read()
     obj.close()
     obj.release_conn()
@@ -67,14 +62,14 @@ def process_image(client, key: str, size=(512, 512)):
         "x-amz-meta-format": "png",
     }
     client.put_object(
-        FORMATTED_BUCKET,
+        config.FORMATTED_BUCKET,
         dst_key,
         io.BytesIO(png_bytes),
         length=len(png_bytes),
         content_type="image/png",
         metadata=metadata
     )
-    print(f"Saved in: {FORMATTED_BUCKET}/{dst_key}")
+    print(f"Saved in: {config.FORMATTED_BUCKET}/{dst_key}")
 
 def main():
     parser = argparse.ArgumentParser()
@@ -83,7 +78,7 @@ def main():
 
     client = get_minio_client()
 
-    for key in list_objects(client, LANDING_BUCKET, SRC_PREFIX):
+    for key in list_objects(client, config.LANDING_BUCKET, config.LANDING_IMAGE_PATH):
         try:
             process_image(client, key, size=tuple(args.size))
         except S3Error as e:

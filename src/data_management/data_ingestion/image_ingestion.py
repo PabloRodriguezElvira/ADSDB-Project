@@ -2,16 +2,15 @@ from pathlib import Path
 from zipfile import ZipFile
 from minio import Minio
 from minio.error import S3Error
-from src.common.minio_client import get_minio_client 
-from src.common.progressBar import ProgressBar
 from datetime import datetime
 from zoneinfo import ZoneInfo
 import kagglehub
 import mimetypes
 from typing import Optional
 
-
-IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tif", ".tiff", ".webp"}
+from src.common.minio_client import get_minio_client 
+from src.common.progressBar import ProgressBar
+import src.common.global_variables as config
 
 
 def upload_file_to_bucket(
@@ -79,7 +78,7 @@ def upload_directory_images(client: Minio, bucket: str, folder: str, dataset_pat
             if not img_file.is_file():
                 continue
 
-            if img_file.suffix.lower() in IMAGE_EXTENSIONS:
+            if img_file.suffix.lower() in config.IMAGE_EXTENSIONS:
                 img_type = img_file.parent.name
                 file_size = img_file.stat().st_size
                 upload_queue.append((split_dir.name, img_file, img_type, file_size))
@@ -94,7 +93,7 @@ def upload_directory_images(client: Minio, bucket: str, folder: str, dataset_pat
     ) as progress:
         for idx, (split_name, img_file, img_type, _) in enumerate(upload_queue):
             img_name = f"{img_type}-{split_name}-{idx}{img_file.suffix}"
-            object_name = f"{folder}/{img_name}"
+            object_name = f"{folder}{img_name}"
             upload_file_to_bucket(client, bucket, object_name, img_file, img_type, progress)
 
     return True
@@ -113,11 +112,8 @@ def main():
     dataset_path = Path(path)
     
 
-    bucket = "landing-zone"
-    folder = "temporal_landing"
-
     # Upload images to temporal_landing bucket
-    uploaded = upload_directory_images(client, bucket, folder, dataset_path)
+    uploaded = upload_directory_images(client, config.LANDING_BUCKET, config.LANDING_TEMPORAL_PATH, dataset_path)
 
     if not uploaded:
         print("[WARN] No se encontraron imágenes para subir al bucket temporal.")

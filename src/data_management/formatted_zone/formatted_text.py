@@ -4,16 +4,11 @@ import json
 import re
 from datetime import datetime
 from zoneinfo import ZoneInfo
-from src.common.minio_client import get_minio_client
 from minio.error import S3Error
 
-# Buckets
-LANDING_BUCKET = "landing-zone"
-FORMATTED_BUCKET = "formatted-zone"
+from src.common.minio_client import get_minio_client
+import src.common.global_variables as config
 
-# Folders
-SRC_PREFIX = "persistent_landing/text_data/"
-DST_PREFIX = "formatted/text_data/"
 
 FIELDS_TO_KEEP = ["title", "ingredients", "directions"]
 
@@ -23,10 +18,10 @@ def list_objects(client, bucket, prefix):
             yield obj.object_name
 
 def dst_key_for(src_key: str) -> str:
-    if src_key.startswith(SRC_PREFIX):
-        dst_key = src_key.replace(SRC_PREFIX, DST_PREFIX, 1)
+    if src_key.startswith(config.LANDING_TEXT_PATH):
+        dst_key = src_key.replace(config.LANDING_TEXT_PATH, config.FORMATTED_TEXT_PATH, 1)
     else:
-        dst_key = DST_PREFIX + os.path.basename(src_key)
+        dst_key = config.FORMATTED_TEXT_PATH + os.path.basename(src_key)
     base, _ = os.path.splitext(dst_key)
     return base + ".json"
 
@@ -63,7 +58,7 @@ def process_text(client, key: str):
     print("Processing:", key)
 
     # Download
-    obj = client.get_object(LANDING_BUCKET, key)
+    obj = client.get_object(config.LANDING_BUCKET, key)
     raw = obj.read()
     obj.close(); obj.release_conn()
 
@@ -107,19 +102,19 @@ def process_text(client, key: str):
     }
 
     client.put_object(
-        FORMATTED_BUCKET,
+        config.FORMATTED_BUCKET,
         dst_key,
         io.BytesIO(payload),
         length=len(payload),
         content_type="application/json",
         metadata=metadata
     )
-    print(f"Saved in: {FORMATTED_BUCKET}/{dst_key}")
+    print(f"Saved in: {config.FORMATTED_BUCKET}/{dst_key}")
 
 def main():
     client = get_minio_client()
 
-    for key in list_objects(client, LANDING_BUCKET, SRC_PREFIX):
+    for key in list_objects(client, config.LANDING_BUCKET, config.LANDING_TEXT_PATH):
         try:
             process_text(client, key)
         except S3Error as e:

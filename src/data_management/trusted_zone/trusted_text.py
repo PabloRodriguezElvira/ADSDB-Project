@@ -10,14 +10,6 @@ from minio import Minio
 from minio.error import S3Error
 
 
-# Buckets
-FORMATTED_BUCKET = "formatted-zone"
-TRUSTED_BUCKET = "trusted-zone"
-
-# Folders
-SRC_PREFIX = "formatted/text_data/"
-DST_PREFIX = "trusted/text_data/"
-
 
 def list_objects(client, bucket, prefix):
     for obj in client.list_objects(bucket, prefix=prefix, recursive=True):
@@ -26,10 +18,10 @@ def list_objects(client, bucket, prefix):
 
 
 def dst_key_for(src_key: str):
-    if src_key.startswith(SRC_PREFIX):
-        dst_key = src_key.replace(SRC_PREFIX, DST_PREFIX, 1)
+    if src_key.startswith(config.FORMATTED_TEXT_PATH):
+        dst_key = src_key.replace(config.FORMATTED_TEXT_PATH, config.TRUSTED_TEXT_PATH, 1)
     else:
-        dst_key = DST_PREFIX + os.path.basename(src_key)
+        dst_key = config.TRUSTED_TEXT_PATH + os.path.basename(src_key)
     base, _ = os.path.splitext(dst_key)
     return base + ".json"
 
@@ -72,7 +64,7 @@ def clean_text(text: str):
     return text
 
 def process_text(client, key: str):
-    obj = client.get_object(FORMATTED_BUCKET, key)
+    obj = client.get_object(config.FORMATTED_BUCKET, key)
     raw = obj.read()
     obj.close(); obj.release_conn()
 
@@ -113,7 +105,7 @@ def process_text(client, key: str):
 
     # Uploaded
     client.put_object(
-        TRUSTED_BUCKET,
+        config.TRUSTED_BUCKET,
         dst_key,
         io.BytesIO(transform),
         length=len(transform),
@@ -121,12 +113,12 @@ def process_text(client, key: str):
         metadata=metadata
     )
 
-    print(f"Cleaned JSON in: {TRUSTED_BUCKET}/{dst_key}")
+    print(f"Cleaned JSON in: {config.TRUSTED_BUCKET}/{dst_key}")
 
 def main():
     client = get_minio_client()
 
-    for key in list_objects(client, FORMATTED_BUCKET, SRC_PREFIX):
+    for key in list_objects(client, config.FORMATTED_BUCKET, config.FORMATTED_TEXT_PATH):
         try:
             process_text(client, key)
         except S3Error as e:

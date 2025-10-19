@@ -3,8 +3,10 @@ import kagglehub
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from minio.error import S3Error
+
 from src.common.minio_client import get_minio_client
 from src.common.progressBar import ProgressBar
+import src.common.global_variables as config
 
 # Initialize the MinIO client using a helper function
 client = get_minio_client()
@@ -49,7 +51,6 @@ def upload_file_to_bucket(bucket: str, destination_object: str, json_file: Path)
             progress=progress,
         )
 
-
 def main():
     """
     Main workflow:
@@ -59,17 +60,16 @@ def main():
     """
 
     # Download dataset from KaggleHub (automatically cached locally)
-    path = kagglehub.dataset_download("hugodarwood/epirecipes")
+    dataset_path = kagglehub.dataset_download("hugodarwood/epirecipes")
 
     # Define target bucket and locate the JSON file
-    bucket = "landing-zone"
-    json_file = get_json_file_from_folder(path, "full_format_recipes.json")
+    json_file = get_json_file_from_folder(dataset_path, config.JSON_NAME)
 
     # Define destination path inside the bucket
-    destination_object = f"temporal_landing/{json_file.name}"
+    destination_object = f"{config.LANDING_TEMPORAL_PATH}{json_file.name}"
 
     # Upload file to MinIO
-    upload_file_to_bucket(bucket, destination_object, json_file)
+    upload_file_to_bucket(config.LANDING_BUCKET, destination_object, json_file)
 
 
 if __name__ == "__main__":
