@@ -7,12 +7,10 @@ from zoneinfo import ZoneInfo
 from src.common.minio_client import get_minio_client
 from minio.error import S3Error
 from PIL import Image, ImageStat, UnidentifiedImageError
-import cv2
+#import cv2
 import numpy as np
 import hashlib
-from collections import defaultdict
-#import warnings
-#warnings.filterwarnings("ignore", category=UserWarning)
+#from collections import defaultdict
 
 # Buckets
 FORMATTED_BUCKET = "formatted-zone"
@@ -133,96 +131,101 @@ def validate_images(images: dict):
 
     return {"valid": valid_images, "invalid": invalid_images}
 
-def duplicates(images: dict):# check if we have copy paste functions per group
-    groups = {"training": {}, "validation": {}, "evaluation": {}}# create a dictionary to put the images
+def duplicates(images: dict):#check copy paste images (add in duplicates the name of the duplicated images)
+    
+    md5_map = {}        # hash -> nombre original si contiene el hash aqui dentro se añadira a duplicado
+    duplicates = []     # nombres duplicados
+    hashes = {}         # nombre -> hash de todas las imagenes
 
-    for name, data in images.items():# we insert the name and bytes of the image 
-        lname = name.lower()
-        if "-training-" in lname:
-            groups["training"][name] = data
-        elif "-validation-" in lname:
-            groups["validation"][name] = data
-        elif "-evaluation-" in lname:
-            groups["evaluation"][name] = data
-    results = {}
+    for name, data in images.items():
+        md5 = hashlib.md5(data).hexdigest()
+        hashes[name] = md5
 
-    for split, subset in groups.items():# subset is the dict with name and data of every group
-        md5_dup = {}
-        duplicates = []# keep the name of the duplicate images
-        for name, data in subset.items():
-            md5 = hashlib.md5(data).hexdigest()# check duplicates per group
-            if md5 in md5_dup:
-                duplicates.append((name, md5_dup[md5]))# the current image and which is in the dict md5_dup
-            else:
-                md5_dup[md5] = name
-        unique_count = len(subset) - len(set([a for a, _ in duplicates]))
-        results[split] = {
-            "duplicates": duplicates,
-            "unique_count": unique_count # how many unique images we have
-        }
-    return results
+        if md5 in md5_map:
+            # Ya existe este hash: duplicado
+            duplicates.append(name)
+        else:
+            # Primera vez que aparece este hash: conservar
+            md5_map[md5] = name
 
-def count_images_by_food(images: dict):
-    counts = {
-        "training": {},
-        "validation": {},
-        "evaluation": {},
+    unique_count = len(images) - len(duplicates)
+
+    return {
+        "duplicates": duplicates, 
+        "unique_count": unique_count,
+        "hashes": hashes           
     }
 
+def count_images_by_food(images: dict):
+
+    counts = {}
     for name in images.keys():
-        lname = name.lower()
-
-        # Detect the group
-        if "-training-" in lname:
-            group = "training"
-        elif "-validation-" in lname:
-            group = "validation"
-        elif "-evaluation-" in lname:
-            group = "evaluation"
-        else:
-            continue
-
-        # Extract the food name before the group
         base = os.path.basename(name)
-        food = re.split(r"-(training|validation|evaluation)-", base, flags=re.IGNORECASE)[0]
-        food = food.replace(".png", "").capitalize()
+        food = re.sub(r"-(training|validation|evaluation)-", "-", base, flags=re.IGNORECASE)# we ignore what type belong
+        food = re.sub(r"\.png$", "", food, flags=re.IGNORECASE)
+        food = food.replace("-", " ").strip().capitalize()
 
-        counts[group][food] = counts[group].get(food, 0) + 1
+        counts[food] = counts.get(food, 0) + 1
 
     return counts
-
 def process_images(client):
+
     all_images = {}
     for key in list_objects(client, FORMATTED_BUCKET, SRC_PREFIX):
         obj = client.get_object(FORMATTED_BUCKET, key)
         data = obj.read()
-        obj.close(); obj.release_conn()
+        obj.close()
+        obj.release_conn()
         all_images[key] = data
 
-    # Validating images
+    # Validate images
     validated = validate_images(all_images)
     valid_images = validated["valid"]
     invalid_images = validated["invalid"]
 
-    # Duplicates only to valid images
+    # Detect duplicates in the valid images
     duplicates_report = duplicates(valid_images)
+    duplicate_names = set(duplicates_report["duplicates"])
+    hashes = duplicates_report["hashes"]
 
-    # Upload not duplicate and valid images and we uploaded to trusted zone
     uploaded_trusted = 0
+    uploaded_rejected = 0
+    rejected_report = {}
+
+    # Upload valid and non-duplicate images to trusted
     if valid_images:
-        print("\n Uploading valid images")
+        print("\n Uploading valid, non-duplicate images to Trusted Zone")
         for name, data in valid_images.items():
-            # Check if there are duplicate images
-            if any(name == dup for group in duplicates_report.values()
-                for dup, _ in group["duplicates"]):
+            if name in duplicate_names:
+                # if it is duplicated to Rejected Zone
+                print(f" Duplicate detected, moving to rejected: {name}")
+                dst_key = dst_key_for(name, DST2_PREFIX)
+                metadata = {
+                    "x-amz-meta-source-key": name,
+                    "x-amz-meta-reason": "duplicate image",
+                    "x-amz-meta-processed-at": datetime.now(ZoneInfo("Europe/Madrid")).isoformat(),
+                }
+                client.put_object(
+                    REJECTED_BUCKET,
+                    dst_key,
+                    io.BytesIO(data),
+                    length=len(data),
+                    content_type="image/png",
+                    metadata=metadata
+                )
+                uploaded_rejected += 1
+                rejected_report.setdefault("duplicate image", []).append(dst_key)
                 continue
 
-            dst_key = dst_key_for(name,DST1_PREFIX)
+            # Image valid and unique
+            dst_key = dst_key_for(name, DST1_PREFIX)
             metadata = {
                 "x-amz-meta-source-key": name,
+                "x-amz-meta-hash": hashes[name],
                 "x-amz-meta-processed-at": datetime.now(ZoneInfo("Europe/Madrid")).isoformat(),
                 "x-amz-meta-format": "png",
             }
+
             client.put_object(
                 TRUSTED_BUCKET,
                 dst_key,
@@ -234,12 +237,9 @@ def process_images(client):
             uploaded_trusted += 1
             print(f" Uploaded to Trusted: {dst_key}")
 
-    # Upload rejected images to the rejected-zone
-    uploaded_rejected = 0
-    rejected_report = {}
-
+    
     if invalid_images:
-        print("\n Uploading rejected images")
+        print("\n Uploading invalid images to Rejected Zone")
         for name, reason in invalid_images.items():
             data = all_images[name]
             dst_key = dst_key_for(name, DST2_PREFIX)
@@ -257,32 +257,27 @@ def process_images(client):
                 metadata=metadata
             )
             uploaded_rejected += 1
+            print(f" Uploaded to Rejected: {dst_key}")
 
-            # Keep it for the final report
-            rejected_report.setdefault(reason, []).append(dst_key)
-
-    # Reasons why they are in the recected bucket
-        print("\nREJECTION REPORT")
+    # Summary
+    if rejected_report:
+        print("\n REJECTION REPORT:")
         for reason, files in rejected_report.items():
-            count = len(files)
-            print(f" - {reason}: {count} image(s) rejected")
-
+            print(f" - {reason}: {len(files)} image(s) rejected")
     else:
         print("\n No rejected images.")
 
+    print(f"\n Uploaded to Trusted: {uploaded_trusted}")
+    print(f" Uploaded to Rejected: {uploaded_rejected}")
 
-    print(f"\nUploaded to Trusted: {uploaded_trusted}")
-    print(f"Uploaded to Rejected: {uploaded_rejected}")
-    # Report of the amount of types of images we have in the trusted bucket per group
+    # Count of images
     food_counts = count_images_by_food(valid_images)
-    print("\n Validated images per group")
-    for group, foods in food_counts.items():
-        print(f"\n {group.upper()}")
-        if not foods:
-            print("No images found")
-        else:
-            for food, count in sorted(foods.items()):
-                print(f" {food}: {count}")
+    print("\n Validated images per food type:")
+    if not food_counts:
+        print("No valid images found.")
+    else:
+        for food, count in sorted(food_counts.items()):
+            print(f" - {food}: {count}")
 
 def main():
       try:
