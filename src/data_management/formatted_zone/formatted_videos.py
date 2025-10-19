@@ -1,18 +1,19 @@
 import os
 import tempfile
 import subprocess
-import imageio_ffmpeg as ffmpeg
 from pathlib import Path
 from datetime import datetime
+from typing import Iterable, List, Optional
 from zoneinfo import ZoneInfo
 import imageio_ffmpeg as ff
+from minio.error import S3Error
 
 from src.common.minio_client import get_minio_client
-from minio.error import S3Error
 import src.common.global_variables as config
+from src.common.progress_bar import ProgressBar
 
 
-def list_objects(client, bucket, prefix):
+def list_objects(client, bucket, prefix) -> Iterable[str]:
     for obj in client.list_objects(bucket, prefix=prefix, recursive=True):
         if not obj.object_name.endswith("/"):
             yield obj.object_name
@@ -41,10 +42,14 @@ def dst_key_for(src_key: str) -> str:
     return base + ".mp4"
 
 
-def process_video(client, key: str):
+def process_video(client, key: str, progress: Optional[ProgressBar] = None):
     ext = Path(key).suffix.lower()
 
-    print("Processing:", key)
+    if progress:
+        progress.set_description(f"Processing {Path(key).name}", refresh=False)
+    else:
+        print("Processing:", key)
+
     with tempfile.TemporaryDirectory() as tmp:
         in_path = os.path.join(tmp, "in" + ext)
         out_path = os.path.join(tmp, "out.mp4")
@@ -75,20 +80,34 @@ def process_video(client, key: str):
                 content_type="video/mp4",
                 metadata = metadata
             )
-        print(f"Saved: {config.FORMATTED_BUCKET}/{dst_key}")
+       
+
 
 def main():
-    
     client = get_minio_client()
-    for key in list_objects(client, config.LANDING_BUCKET, config.LANDING_VIDEO_PATH):
-        try:
-            process_video(client, key)
-        except S3Error as e:
-            print("MinIO error:", e)
-        except subprocess.CalledProcessError as e:
-            print("ffmpeg error with", key, ":", e)
-        except Exception as e:
-            print("Unexpected error with", key, ":", e)
+    keys: List[str] = list(list_objects(client, config.LANDING_BUCKET, config.LANDING_VIDEO_PATH))
+
+    if not keys:
+        print("[WARN] No videos found to process.")
+        return
+
+    with ProgressBar(
+        total=len(keys),
+        description="Processing videos",
+        unit="file",
+        unit_scale=False,
+    ) as progress:
+        for key in keys:
+            try:
+                process_video(client, key, progress=progress)
+            except S3Error as e:
+                progress.write(f"MinIO error with {key}: {e}")
+            except subprocess.CalledProcessError as e:
+                progress.write(f"ffmpeg error with {key}: {e}")
+            except Exception as e:
+                progress.write(f"Unexpected error with {key}: {e}")
+            finally:
+                progress.update(1)
 
 if __name__ == "__main__":
     main()

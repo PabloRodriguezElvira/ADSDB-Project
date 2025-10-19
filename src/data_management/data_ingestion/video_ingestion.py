@@ -9,12 +9,11 @@ from zoneinfo import ZoneInfo
 from typing import Optional
 
 from src.common.minio_client import get_minio_client
-from src.common.progressBar import ProgressBar
+from src.common.progress_bar import ProgressBar
 import src.common.global_variables as config
 
 # Config
 PEXELS_API_KEY = os.getenv("PEXELS_API_KEY")
-print(PEXELS_API_KEY)
 PEXELS_VIDEO_SEARCH_URL = "https://api.pexels.com/videos/search"
 
 

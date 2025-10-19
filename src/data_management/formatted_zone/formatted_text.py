@@ -2,20 +2,23 @@ import os
 import io
 import json
 import re
+from typing import Iterable, List, Optional
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from minio.error import S3Error
 
 from src.common.minio_client import get_minio_client
 import src.common.global_variables as config
+from src.common.progress_bar import ProgressBar
 
 
 FIELDS_TO_KEEP = ["title", "ingredients", "directions"]
 
-def list_objects(client, bucket, prefix):
+def list_objects(client, bucket, prefix) -> Iterable[str]:
     for obj in client.list_objects(bucket, prefix=prefix, recursive=True):
         if not obj.object_name.endswith("/"):
             yield obj.object_name
+
 
 def dst_key_for(src_key: str) -> str:
     if src_key.startswith(config.LANDING_TEXT_PATH):
@@ -24,6 +27,7 @@ def dst_key_for(src_key: str) -> str:
         dst_key = config.FORMATTED_TEXT_PATH + os.path.basename(src_key)
     base, _ = os.path.splitext(dst_key)
     return base + ".json"
+
 
 def _has_content(value) -> bool:
     if value is None:
@@ -34,12 +38,14 @@ def _has_content(value) -> bool:
         return any(_has_content(v) for v in value)
     return bool(value)
 
+
 def _normalize_root(data):
     if isinstance(data, dict) and "root" in data and isinstance(data["root"], list):
         return data["root"]
     if isinstance(data, list):
         return data
     raise ValueError("Unsupported JSON structure: expected list or dict with 'root'.")
+
 
 def _to_space_text(value) -> str:
     if value is None:
@@ -54,8 +60,12 @@ def _to_space_text(value) -> str:
     s = re.sub(r"\s+", " ", s).strip()
     return s
 
-def process_text(client, key: str):
-    print("Processing:", key)
+
+def process_text(client, key: str, progress: Optional[ProgressBar] = None):
+    if progress:
+        progress.set_description(f"Processing {os.path.basename(key)}", refresh=False)
+    else:
+        print("Processing:", key)
 
     # Download
     obj = client.get_object(config.LANDING_BUCKET, key)
@@ -109,18 +119,35 @@ def process_text(client, key: str):
         content_type="application/json",
         metadata=metadata
     )
-    print(f"Saved in: {config.FORMATTED_BUCKET}/{dst_key}")
+    
+
+
 
 def main():
     client = get_minio_client()
 
-    for key in list_objects(client, config.LANDING_BUCKET, config.LANDING_TEXT_PATH):
-        try:
-            process_text(client, key)
-        except S3Error as e:
-            print(f"MinIO error with {key}: {e}")
-        except Exception as e:
-            print(f"Error processing {key}: {e}")
+    keys: List[str] = list(list_objects(client, config.LANDING_BUCKET, config.LANDING_TEXT_PATH))
+
+    if not keys:
+        print("[WARN] No text files found to process.")
+        return
+
+    with ProgressBar(
+        total=len(keys),
+        description="Processing texts",
+        unit="file",
+        unit_scale=False,
+    ) as progress:
+        for key in keys:
+            try:
+                process_text(client, key, progress=progress)
+            except S3Error as e:
+                progress.write(f"MinIO error with {key}: {e}")
+            except Exception as e:
+                progress.write(f"Error processing {key}: {e}")
+            finally:
+                progress.update(1)
+
 
 if __name__ == "__main__":
     main()

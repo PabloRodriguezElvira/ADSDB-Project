@@ -4,14 +4,16 @@ import io
 import json
 import re
 from datetime import datetime
+from typing import Iterable, List, Optional
 from zoneinfo import ZoneInfo
-from src.common.minio_client import get_minio_client
-from minio import Minio
 from minio.error import S3Error
 
+from src.common.minio_client import get_minio_client
+import src.common.global_variables as config
+from src.common.progress_bar import ProgressBar
 
 
-def list_objects(client, bucket, prefix):
+def list_objects(client, bucket, prefix) -> Iterable[str]:
     for obj in client.list_objects(bucket, prefix=prefix, recursive=True):
         if not obj.object_name.endswith("/"):
             yield obj.object_name
@@ -63,7 +65,10 @@ def clean_text(text: str):
     text = to_lower_preserving_tags(text)
     return text
 
-def process_text(client, key: str):
+def process_text(client, key: str, progress: Optional[ProgressBar] = None):
+    if progress:
+        progress.set_description(f"Processing {os.path.basename(key)}", refresh=False)
+
     obj = client.get_object(config.FORMATTED_BUCKET, key)
     raw = obj.read()
     obj.close(); obj.release_conn()
@@ -113,18 +118,30 @@ def process_text(client, key: str):
         metadata=metadata
     )
 
-    print(f"Cleaned JSON in: {config.TRUSTED_BUCKET}/{dst_key}")
-
 def main():
     client = get_minio_client()
 
-    for key in list_objects(client, config.FORMATTED_BUCKET, config.FORMATTED_TEXT_PATH):
-        try:
-            process_text(client, key)
-        except S3Error as e:
-            print(f"MinIO error with {key}: {e}")
-        except Exception as e:
-            print(f"Error processing {key}: {e}")
+    keys: List[str] = list(list_objects(client, config.FORMATTED_BUCKET, config.FORMATTED_TEXT_PATH))
+
+    if not keys:
+        print("[WARN] No formatted texts found to process.")
+        return
+
+    with ProgressBar(
+        total=len(keys),
+        description="Processing texts",
+        unit="file",
+        unit_scale=False,
+    ) as progress:
+        for key in keys:
+            try:
+                process_text(client, key, progress=progress)
+            except S3Error as e:
+                progress.write(f"MinIO error with {key}: {e}")
+            except Exception as e:
+                progress.write(f"Error processing {key}: {e}")
+            finally:
+                progress.update(1)
 
 if __name__ == "__main__":
     main()

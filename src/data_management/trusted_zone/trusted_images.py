@@ -1,22 +1,19 @@
 import os
 import io
 import re
-import argparse
+import hashlib
 from datetime import datetime
+from typing import Iterable, List
 from zoneinfo import ZoneInfo
 from minio.error import S3Error
 from PIL import Image, ImageStat, UnidentifiedImageError
-import cv2
-import numpy as np
-import hashlib
-from collections import defaultdict
 
 from src.common.minio_client import get_minio_client
 import src.common.global_variables as config
+from src.common.progress_bar import ProgressBar
 
 
-
-def list_objects(client, bucket, prefix):
+def list_objects(client, bucket, prefix) -> Iterable[str]:
     for obj in client.list_objects(bucket, prefix=prefix, recursive=True):
         if not obj.object_name.endswith("/"):
             yield obj.object_name
@@ -126,6 +123,7 @@ def validate_images(images: dict):
 
     return {"valid": valid_images, "invalid": invalid_images}
 
+
 def duplicates(images: dict):# check if we have copy paste functions per group
     groups = {"training": {}, "validation": {}, "evaluation": {}}# create a dictionary to put the images
 
@@ -154,6 +152,7 @@ def duplicates(images: dict):# check if we have copy paste functions per group
             "unique_count": unique_count # how many unique images we have
         }
     return results
+
 
 def count_images_by_food(images: dict):
     counts = {
@@ -184,13 +183,31 @@ def count_images_by_food(images: dict):
 
     return counts
 
+
 def process_images(client):
+    keys: List[str] = list(list_objects(client, config.FORMATTED_BUCKET, config.FORMATTED_IMAGE_PATH))
+
+    if not keys:
+        print("[WARN] No formatted images found to validate.")
+        return
+
     all_images = {}
-    for key in list_objects(client, config.FORMATTED_BUCKET, config.FORMATTED_IMAGE_PATH):
-        obj = client.get_object(config.FORMATTED_BUCKET, key)
-        data = obj.read()
-        obj.close(); obj.release_conn()
-        all_images[key] = data
+
+    # First, we load the images
+    with ProgressBar(
+        total=len(keys),
+        description="Loading images",
+        unit="image",
+        unit_scale=False,
+    ) as progress:
+        for key in keys:
+            progress.set_description(f"Loading {os.path.basename(key)}", refresh=False)
+            obj = client.get_object(config.FORMATTED_BUCKET, key)
+            data = obj.read()
+            obj.close()
+            obj.release_conn()
+            all_images[key] = data
+            progress.update(1)
 
     # Validating images
     validated = validate_images(all_images)
@@ -203,69 +220,87 @@ def process_images(client):
     # Upload not duplicate and valid images and we uploaded to trusted zone
     uploaded_trusted = 0
     if valid_images:
-        print("\n Uploading valid images")
-        for name, data in valid_images.items():
-            # Check if there are duplicate images
-            if any(name == dup for group in duplicates_report.values()
-                for dup, _ in group["duplicates"]):
-                continue
+        duplicate_names = {
+            dup
+            for group in duplicates_report.values()
+            for dup, _ in group["duplicates"]
+        }
 
-            dst_key = dst_key_for(name,config.TRUSTED_IMAGE_PATH)
-            metadata = {
-                "x-amz-meta-source-key": name,
-                "x-amz-meta-processed-at": datetime.now(ZoneInfo("Europe/Madrid")).isoformat(),
-                "x-amz-meta-format": "png",
-            }
-            client.put_object(
-                config.TRUSTED_BUCKET,
-                dst_key,
-                io.BytesIO(data),
-                length=len(data),
-                content_type="image/png",
-                metadata=metadata
-            )
-            uploaded_trusted += 1
-            print(f" Uploaded to Trusted: {dst_key}")
+        with ProgressBar(
+            total=len(valid_images),
+            description="Uploading trusted images",
+            unit="image",
+            unit_scale=False,
+        ) as progress:
+            for name, data in valid_images.items():
+                progress.set_description(f"Trusted {os.path.basename(name)}", refresh=False)
+
+                if name in duplicate_names:
+                    progress.update(1)
+                    continue
+
+                dst_key = dst_key_for(name, config.TRUSTED_IMAGE_PATH)
+                metadata = {
+                    "x-amz-meta-source-key": name,
+                    "x-amz-meta-processed-at": datetime.now(ZoneInfo("Europe/Madrid")).isoformat(),
+                    "x-amz-meta-format": "png",
+                }
+                client.put_object(
+                    config.TRUSTED_BUCKET,
+                    dst_key,
+                    io.BytesIO(data),
+                    length=len(data),
+                    content_type="image/png",
+                    metadata=metadata
+                )
+                uploaded_trusted += 1
+                progress.update(1)
 
     # Upload rejected images to the rejected-zone
     uploaded_rejected = 0
     rejected_report = {}
 
     if invalid_images:
-        print("\n Uploading rejected images")
-        for name, reason in invalid_images.items():
-            data = all_images[name]
-            dst_key = dst_key_for(name, config.REJECTED_IMAGE_PATH)
-            metadata = {
-                "x-amz-meta-source-key": name,
-                "x-amz-meta-reason": reason,
-                "x-amz-meta-processed-at": datetime.now(ZoneInfo("Europe/Madrid")).isoformat(),
-            }
-            client.put_object(
-                config.REJECTED_BUCKET,
-                dst_key,
-                io.BytesIO(data),
-                length=len(data),
-                content_type="image/png",
-                metadata=metadata
-            )
-            uploaded_rejected += 1
+        with ProgressBar(
+            total=len(invalid_images),
+            description="Uploading rejected images",
+            unit="image",
+            unit_scale=False,
+        ) as progress:
+            for name, reason in invalid_images.items():
+                progress.set_description(f"Rejected {os.path.basename(name)}", refresh=False)
+                data = all_images[name]
+                dst_key = dst_key_for(name, config.REJECTED_IMAGE_PATH)
+                metadata = {
+                    "x-amz-meta-source-key": name,
+                    "x-amz-meta-reason": reason,
+                    "x-amz-meta-processed-at": datetime.now(ZoneInfo("Europe/Madrid")).isoformat(),
+                }
+                client.put_object(
+                    config.REJECTED_BUCKET,
+                    dst_key,
+                    io.BytesIO(data),
+                    length=len(data),
+                    content_type="image/png",
+                    metadata=metadata
+                )
+                uploaded_rejected += 1
 
-            # Keep it for the final report
-            rejected_report.setdefault(reason, []).append(dst_key)
+                # Keep it for the final report
+                rejected_report.setdefault(reason, []).append(dst_key)
+                progress.update(1)
 
-    # Reasons why they are in the recected bucket
         print("\nREJECTION REPORT")
         for reason, files in rejected_report.items():
             count = len(files)
             print(f" - {reason}: {count} image(s) rejected")
 
     else:
-        print("\n No rejected images.")
-
+        print("\nNo rejected images.")
 
     print(f"\nUploaded to Trusted: {uploaded_trusted}")
     print(f"Uploaded to Rejected: {uploaded_rejected}")
+
     # Report of the amount of types of images we have in the trusted bucket per group
     food_counts = count_images_by_food(valid_images)
     print("\n Validated images per group")
@@ -278,12 +313,12 @@ def process_images(client):
                 print(f" {food}: {count}")
 
 def main():
-      try:
-          client = get_minio_client()
-          process_images(client)
-      except S3Error as e:
-          print(f"MinIO error: {e}")
-      except Exception as e:
+    try:
+        client = get_minio_client()
+        process_images(client)
+    except S3Error as e:
+        print(f"MinIO error: {e}")
+    except Exception as e:
         print(f"Unexpected error: {e}")
 
 if __name__ == "__main__":

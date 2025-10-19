@@ -5,7 +5,7 @@ from zoneinfo import ZoneInfo
 from minio.error import S3Error
 
 from src.common.minio_client import get_minio_client
-from src.common.progressBar import ProgressBar
+from src.common.progress_bar import ProgressBar
 import src.common.global_variables as config
 
 # Initialize the MinIO client using a helper function
