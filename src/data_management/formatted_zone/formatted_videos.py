@@ -13,20 +13,15 @@ import src.common.global_variables as config
 from src.common.progress_bar import ProgressBar
 
 
-# Buckets
-LANDING_BUCKET = "landing-zone"
-FORMATTED_BUCKET = "formatted-zone"
-
-# Folders
-SRC_PREFIX = "persistent_landing/video_data/"
-DST_PREFIX = "formatted/video_data/"
-
 def list_objects(client, bucket, prefix) -> Iterable[str]:
+    """List all files (excluding folders) from a MinIO bucket and prefix."""
     for obj in client.list_objects(bucket, prefix=prefix, recursive=True):
         if not obj.object_name.endswith("/"):
             yield obj.object_name
-            
+
+
 def transcode_to_mp4(in_path, out_path):
+    """Transcode an input video to MP4 (H.264/AAC) format using FFmpeg."""
     ffmpeg_bin = ff.get_ffmpeg_exe()
     cmd = [
         ffmpeg_bin, "-y", "-hide_banner", "-loglevel", "error",
@@ -39,19 +34,22 @@ def transcode_to_mp4(in_path, out_path):
     ]
     subprocess.run(cmd, check=True)
 
+
 def dst_key_for(src_key: str) -> str:
-    if src_key.startswith(SRC_PREFIX):
-        dst_key = src_key.replace(SRC_PREFIX, DST_PREFIX, 1)
+    """Generate the destination key (path) for the converted MP4 video."""
+    if src_key.startswith(config.LANDING_VIDEO_PATH):
+        dst_key = src_key.replace(config.LANDING_VIDEO_PATH, config.FORMATTED_VIDEO_PATH, 1)
     else:
-        dst_key = DST_PREFIX + os.path.basename(src_key)
+        dst_key = config.FORMATTED_VIDEO_PATH + os.path.basename(src_key)
     base, _ = os.path.splitext(dst_key)
     return base + ".mp4"
 
 
 def process_video(client, key: str, progress: Optional[ProgressBar] = None):
-
+    """Download a video, transcode it to MP4, and upload it back to MinIO."""
     ext = Path(key).suffix.lower()
 
+    # Update or print progress info
     if progress:
         progress.set_description(f"Processing {Path(key).name}", refresh=False)
     else:
@@ -61,16 +59,16 @@ def process_video(client, key: str, progress: Optional[ProgressBar] = None):
         in_path = os.path.join(tmp, "in" + ext)
         out_path = os.path.join(tmp, "out.mp4")
 
-        # Download
-        obj = client.get_object(LANDING_BUCKET, key)
+        # Download video from MinIO
+        obj = client.get_object(config.LANDING_BUCKET, key)
         with open(in_path, "wb") as f:
             f.write(obj.read())
         obj.close(); obj.release_conn()
 
-        # Convert
+        # Transcode video to MP4 format
         transcode_to_mp4(in_path, out_path)
 
-        # Upload
+        # Upload the transcoded video back to the formatted bucket
         dst_key = dst_key_for(key)
         size = os.path.getsize(out_path)
         metadata = {
@@ -80,16 +78,17 @@ def process_video(client, key: str, progress: Optional[ProgressBar] = None):
         }
         with open(out_path, "rb") as f:
             client.put_object(
-                FORMATTED_BUCKET,
+                config.FORMATTED_BUCKET,
                 dst_key,
                 data=f,
                 length=size,
                 content_type="video/mp4",
-                metadata = metadata
+                metadata=metadata
             )
 
 
 def main():
+    """Main entry point: list videos, transcode each, and track progress."""
     client = get_minio_client()
     keys: List[str] = list(list_objects(client, config.LANDING_BUCKET, config.LANDING_VIDEO_PATH))
 
@@ -97,6 +96,7 @@ def main():
         print("[WARN] No videos found to process.")
         return
 
+    # Process videos with a progress bar
     with ProgressBar(
         total=len(keys),
         description="Processing videos",
@@ -114,6 +114,7 @@ def main():
                 progress.write(f"Unexpected error with {key}: {e}")
             finally:
                 progress.update(1)
+
 
 if __name__ == "__main__":
     main()
