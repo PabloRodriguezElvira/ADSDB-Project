@@ -150,15 +150,27 @@ def duplicates(images: dict):
 
 
 def count_images_by_food(images: dict):
+
     counts = {}
     for name in images.keys():
         base = os.path.basename(name)
-        food = re.sub(
-            r"-(training|validation|evaluation)-", "-", base, flags=re.IGNORECASE
-        )
-        food = re.sub(r"\.png$", "", food, flags=re.IGNORECASE)
-        food = food.replace("-", " ").strip().capitalize()
 
+        # 1️⃣ Quitar extensión .png
+        food = re.sub(r"\.png$", "", base, flags=re.IGNORECASE)
+
+        # 2️⃣ Quitar la parte de tipo de conjunto (training, validation, evaluation)
+        food = re.sub(r"-(training|validation|evaluation)", "", food, flags=re.IGNORECASE)
+
+        # 3️⃣ Quitar números al final o intermedios (como -192 o -3321)
+        food = re.sub(r"-?\d+$", "", food)
+
+        # 4️⃣ Reemplazar guiones por espacios y limpiar
+        food = food.replace("-", " ").strip()
+
+        # 5️⃣ Normalizar capitalización
+        food = food.capitalize()
+
+        # 6️⃣ Contar
         counts[food] = counts.get(food, 0) + 1
 
     return counts
