@@ -1,75 +1,85 @@
 import torch
 import numpy as np
 from PIL import Image
-import os
-from transformers import AutoProcessor, AutoModel, CLIPModel, CLIPProcessor
+from transformers import (
+    AutoProcessor,
+    AutoModelForVision2Seq,
+    CLIPModel,
+    CLIPProcessor
+)
+print("HOLA")
 from sentence_transformers import SentenceTransformer
 from src.common.chroma_client import get_client, get_text_collection, get_image_collection
-from transformers import BlipProcessor, BlipForConditionalGeneration
 
-
-# ============================================================
-# 🔹 1️⃣ Conexión a ChromaDB
-# ============================================================
-
+# Connection to ChromaDB
 client = get_client()
+print(client)
 col_text = get_text_collection(client)
-col_img = get_image_collection(client)
+col_img  = get_image_collection(client)
 
 text_encoder = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
-clip_model = CLIPModel.from_pretrained("laion/CLIP-ViT-B-32-laion2B-s34B-b79K")
-clip_proc = CLIPProcessor.from_pretrained("laion/CLIP-ViT-B-32-laion2B-s34B-b79K")
 
+clip_model = CLIPModel.from_pretrained("openai/clip-vit-large-patch14")
+clip_proc = CLIPProcessor.from_pretrained("openai/clip-vit-large-patch14")
 
-# ============================================================
-# 🔹 2️⃣ Funciones auxiliares
-# ============================================================
-
-def get_text_embedding(text_encoder, text: str):
+def get_text_embedding(text_encoder, text: str):# embeddings from the input text
     emb = text_encoder.encode(text, normalize_embeddings=True).tolist()
     return emb
 
-
-def get_image_embedding(clip_model, clip_proc, image_path: str):
+def get_image_embedding(clip_model, clip_proc, image_path: str):# embeddings from the input image
+    # get the image
     img = Image.open(image_path).convert("RGB")
-    processed = clip_proc(images=img, return_tensors="pt")
-    pixel_values = processed["pixel_values"]
 
+    # preprocess (resize, normalize, tensor) in order to pass it to get tnhe embeddings
+    processed = clip_proc(images=img, return_tensors="pt")
+    pixel_values = processed["pixel_values"]  # <- más claro
+
+    # get the embeddings
     with torch.no_grad():
         features = clip_model.get_image_features(pixel_values=pixel_values)
         normalized = torch.nn.functional.normalize(features, dim=-1)
 
+    #  converting to list available with chroma
     embedding = normalized.squeeze().cpu().numpy().tolist()
+
     return embedding, img
 
-
 def retrieve_from_chroma(col_text, col_img, text_emb, image_emb, k_text=3, k_img=2):
+    # get the most similar text from chroma
     res_text = col_text.query(
         query_embeddings=[text_emb],
         n_results=k_text,
         include=["documents", "metadatas"]
     )
+    # get the most similar images from chroma
     res_img = col_img.query(
         query_embeddings=[image_emb],
         n_results=k_img,
         include=["metadatas"]
     )
-    return res_text, res_img
 
+    return res_text, res_img
 
 def build_prompt(user_query, res_text, res_img):
     system_prompt = (
-        "You are a professional chef who gives the best cooking advice. "
-        "Use the recipes and images found to create the best possible answer. "
-        "Explain the dish using the references found."
+        "You are a professional chief and you wanna make the best cooking advices. "
+        "Use the recipes and images found to create the best. "
+        "Explain the plate with the references found."
     )
 
+    # Recipes found
     recipes = ""
     for doc, meta in zip(res_text["documents"][0], res_text["metadatas"][0]):
-        title = doc[:20]
-        content = doc[20:]
-        recipes += f"- {title}:\n  {content[:250]}...\n\n"
+      # First 20 letters as title
+      title = doc[:20]
 
+      # The rest of words as ingredients and directions
+      content = doc[20:]
+
+      # Add a correct prompt
+      recipes += f"- {title}:\n  {content[:250]}...\n\n"
+
+    # Images found
     images = ""
     image_paths = []
     for meta in res_img["metadatas"][0]:
@@ -80,7 +90,7 @@ def build_prompt(user_query, res_text, res_img):
 
     user_prompt = (
         f"User is asking for: '{user_query}'.\n\n"
-        f"Here are some related recipes:\n{recipes}\n"
+        f"Here you got some related recipes:\n{recipes}\n"
         f"And some related images:\n{images}\n"
         f"Suggest the best possible recipe according to what the user asked."
     )
@@ -89,60 +99,72 @@ def build_prompt(user_query, res_text, res_img):
 
 
 # ============================================================
-# 🔹 3️⃣ Carga del modelo BLIP
+# 5️⃣ Generación de respuesta (LLaVA)
 # ============================================================
 
-def load_blip_model():
-    MODEL_ID = "Salesforce/blip-image-captioning-base"
+def load_llava_model():
+    """Charging the generative multimodal LLaVA"""
+    MODEL_ID = "llava-hf/llava-1.6-mistral-7b-hf"
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    print(f"\n🔹 Loading lightweight model ({MODEL_ID}) on {device}...")
-    model = BlipForConditionalGeneration.from_pretrained(MODEL_ID).to(device)
-    processor = BlipProcessor.from_pretrained(MODEL_ID)
-    print("✅ BLIP model loaded successfully.\n")
+    print(f"\n Charging the generative model LLaVA en {device}...")
+    model = AutoModelForVision2Seq.from_pretrained(
+        MODEL_ID,
+        torch_dtype=torch.float16 if device == "cuda" else torch.float32
+    ).to(device)
+    processor = AutoProcessor.from_pretrained(MODEL_ID)
     return model, processor, device
 
 
 def generate_response(model, processor, device, query_image, system_prompt, user_prompt):
-    """Generate a textual answer using BLIP"""
-    full_prompt = f"{system_prompt}\n\nUser query: {user_prompt}"
+    """Genera una respuesta textual a partir del prompt y la imagen"""
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_prompt},
+    ]
 
-    inputs = processor(images=query_image, text=full_prompt, return_tensors="pt").to(device)
+    chat_prompt = processor.apply_chat_template(messages, add_generation_prompt=True)
+    inputs = processor(images=query_image, text=chat_prompt, return_tensors="pt").to(device)
+
     with torch.no_grad():
-        output = model.generate(**inputs, max_new_tokens=400)
+        output = model.generate(**inputs, max_new_tokens=400, temperature=0.2)
 
     response = processor.decode(output[0], skip_special_tokens=True)
     return response
 
 
 # ============================================================
-# 🔹 4️⃣ Pipeline completo RAG
+# 6️⃣ Pipeline completo
 # ============================================================
 
 def rag_pipeline(user_query: str, image_path: str):
-    """Runs the full multimodal RAG pipeline"""
+    """Ejecuta el pipeline RAG completo"""
 
-    # Step 1: Get embeddings
+    # 1. Inicialización (asumo que esta función existe en tu código)
+    client, col_text, col_img, text_encoder, clip_model, clip_proc = init_models_and_db()
+
+    # 2. Embeddings
     text_emb = get_text_embedding(text_encoder, user_query)
     image_emb, query_image = get_image_embedding(clip_model, clip_proc, image_path)
 
-    # Step 2: Retrieve from Chroma
+    # 3. Recuperación desde Chroma
     res_text, res_img = retrieve_from_chroma(col_text, col_img, text_emb, image_emb)
 
-    # Step 3: Build prompt
+    # 4. Construcción del prompt (texto + imágenes recuperadas)
     system_prompt, user_prompt, image_paths = build_prompt(user_query, res_text, res_img)
 
-    # Step 4: Load BLIP
-    model, processor, device = load_blip_model()
+    # 5. Carga del modelo generativo (LLaVA)
+    model, processor, device = load_llava_model()
 
-    # Step 5: Generate response
+    # 6. Generación de respuesta
     response = generate_response(model, processor, device, query_image, system_prompt, user_prompt)
 
+    # 🔹 Devuelve tanto la respuesta como las rutas de las imágenes encontradas
     return response, image_paths
 
 
 # ============================================================
-# 🔹 5️⃣ Ejecución del script
+# 7️⃣ Ejecución del script
 # ============================================================
 
 if __name__ == "__main__":
@@ -151,11 +173,12 @@ if __name__ == "__main__":
 
     print("\n🚀 Ejecutando pipeline RAG...\n")
 
+    # 🔹 Captura ambos valores que devuelve el pipeline:
     answer, image_paths = rag_pipeline(query, image_path)
 
-    print("\n🍽️ FINAL RESPONSE FROM BLIP:")
+    print(" FINAL RESPONSE FROM LLAVA:")
     print(answer)
 
-    print("\n🖼️ IMAGES FOUND:")
+    print("\n IMAGES FOUND:")
     for p in image_paths:
         print(f"- {p}")
