@@ -127,26 +127,26 @@ def validate_images(images: dict):
 
 def duplicates(images: dict):
     
-    md5_map = {}# md5:name of unique images
+    md5_seen = {}# md5:name of unique images
     duplicates = []# the names of the images in which its hash is already in md5_map
-    hashes = {}# names of name:hash 
+    #hashes = {} names of name:hash 
 
     for name, data in images.items():
         md5 = hashlib.md5(data).hexdigest()
-        hashes[name] = md5
-
-        if md5 in md5_map:
+        #hashes[name] = md5
+        if md5 in md5_seen:
             duplicates.append(name)
         else:
-            md5_map[md5] = name
+            md5_seen[md5] = name
 
-    unique_count = len(images) - len(duplicates)
-
-    return {
-        "duplicates": duplicates,
-        "unique_count": unique_count,
-        "hashes": hashes,
-    }
+    #unique_count = len(images) - len(duplicates)
+    return set(duplicates)
+    #return {
+       # return set(duplicates)
+        #"duplicates": duplicates,
+        #"unique_count": unique_count,
+        #"hashes": hashes,
+    #}
 
 
 def count_images_by_food(images: dict):
@@ -207,8 +207,8 @@ def process_images(client):
     invalid_images = validated["invalid"]
 
     # Detect duplicates in the valid images
-    duplicates_report = duplicates(valid_images)
-    duplicate_names = set(duplicates_report["duplicates"])
+    duplicate_names = duplicates(valid_images)
+    #duplicate_names = set(duplicates_report["duplicates"])
 
     uploaded_trusted = 0
     uploaded_rejected = 0
