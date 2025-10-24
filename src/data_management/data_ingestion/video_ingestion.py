@@ -12,9 +12,6 @@ from src.common.minio_client import get_minio_client
 from src.common.progress_bar import ProgressBar
 import src.common.global_variables as config
 
-# Config
-PEXELS_API_KEY = os.getenv("PEXELS_API_KEY")
-PEXELS_VIDEO_SEARCH_URL = "https://api.pexels.com/videos/search"
 
 
 def pick_best_video_file(video_files: list):
@@ -40,8 +37,8 @@ def search_pexels_videos(query: str, videos_amount: int, per_page: int = 80):
     Handles pagination automatically (max 80 items per page).
     """
 
-    assert PEXELS_API_KEY, "PEXELS_API_KEY not found in environment."
-    headers = {"Authorization": PEXELS_API_KEY}
+    assert config.PEXELS_API_KEY, "PEXELS_API_KEY not found in environment."
+    headers = {"Authorization": config.PEXELS_API_KEY}
     results = []
     page = 1
     remaining = videos_amount
@@ -49,7 +46,7 @@ def search_pexels_videos(query: str, videos_amount: int, per_page: int = 80):
     while remaining > 0:
         batch_size = min(per_page, remaining)
         params = {"query": query, "per_page": batch_size, "page": page, "orientation": "landscape"}
-        resp = requests.get(PEXELS_VIDEO_SEARCH_URL, headers=headers, params=params, timeout=30)
+        resp = requests.get(config.PEXELS_VIDEO_SEARCH_URL, headers=headers, params=params, timeout=30)
         resp.raise_for_status()
         data = resp.json()
         videos = data.get("videos", [])

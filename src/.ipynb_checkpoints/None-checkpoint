@@ -1,6 +1,0 @@
-/home/paloli/Documentos/MDS/ADSDB/ADSDB-Project/.venv/bin/python3.13: Error while finding module specification for 'src.common.minio_manager' (ModuleNotFoundError: No module named 'src')
-
-[INFO] Module finished with code 1 in 0.0s
-/home/paloli/Documentos/MDS/ADSDB/ADSDB-Project/.venv/bin/python3.13: Error while finding module specification for 'src.common.minio_manager' (ModuleNotFoundError: No module named 'src')
-
-[INFO] Module finished with code 1 in 0.0s

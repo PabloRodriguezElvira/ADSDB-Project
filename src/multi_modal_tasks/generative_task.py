@@ -7,10 +7,11 @@ import io
 import google.generativeai as genai
 import warnings
 from chromadb.utils import embedding_functions as ef
-from src.common.chroma_client import get_client, get_text_collection, get_image_collection
 from minio.error import S3Error
 
 from src.common.minio_client import get_minio_client
+from src.common.chroma_client import get_client, get_text_collection, get_image_collection
+import src.common.global_variables as config
 # ============================================================
 # 🔹 Configuración general y silenciamiento de warnings
 # ============================================================
@@ -33,8 +34,7 @@ client = get_client()
 col_text = get_text_collection(client)
 col_img = get_image_collection(client)
 
-TEXT_MODEL_NAME = os.getenv("TEXT_MODEL_NAME", "sentence-transformers/all-MiniLM-L6-v2")
-text_ef = ef.SentenceTransformerEmbeddingFunction(model_name=TEXT_MODEL_NAME)
+text_ef = ef.SentenceTransformerEmbeddingFunction(model_name=config.TEXT_MODEL_NAME)
 image_ef = ef.OpenCLIPEmbeddingFunction()
 
 genai.configure(api_key="AIzaSyD8De0Y6Dqy19AHe-Kmd549uNRaqtbll6g")  # Usa tu GOOGLE_API_KEY del entorno

@@ -1,3 +1,5 @@
+from pathlib import Path
+
 # ------------- Bucket names -------------
 LANDING_BUCKET = "landing-zone"
 FORMATTED_BUCKET = "formatted-zone"
@@ -51,8 +53,25 @@ REJECTED_FOLDERS = [
 ]
 
 
+# ------------- Video ingestion -------------
+PEXELS_API_KEY = "4tnQhPc8qWhAYxhTjjywT0HIqG4XXELn9mniXCpMJR9xlTcNFx6veL2Y"
+PEXELS_VIDEO_SEARCH_URL = "https://api.pexels.com/videos/search"
+
+
+# ------------- Embeddings and multi-modal tasks -------------
+CHROMADB_PATH = Path("embeddings/chromadb").expanduser().resolve() 
+TEXT_COLLECTION  = "texts_v1"
+IMAGE_COLLECTION = "images_v1"
+TEXT_MODEL_NAME  = "sentence-transformers/all-MiniLM-L6-v2"
+IMAGE_QUERY_PATH = "queries/images/"
+VIDEO_QUERY_PATH = "queries/videos/"
+
+
+
 # ------------- Additional information -------------
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tif", ".tiff", ".webp"}
 VIDEO_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv", ".webm", ".flv", ".wmv"}
 TEXT_EXTENSIONS = {".json", ".txt"}
 JSON_NAME = "full_format_recipes.json"
+
+
