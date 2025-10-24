@@ -76,23 +76,23 @@ def video_properties(file_path: str):
     }
 
     try:
-        ffprobe_path = shutil.which("ffprobe")
+        ffprobe_path = shutil.which("ffprobe") # Locate ffprobe.
         if not ffprobe_path:
             raise FileNotFoundError(
                 "ffprobe not found. Install ffmpeg and make sure it's in your PATH."
             )
 
-        cmd = [
+        cmd = [                                # Command to extract the properties.
             ffprobe_path, "-v", "error",
             "-select_streams", "v:0",
             "-show_entries", "format=duration:stream=width,height,codec_name",
-            "-of", "json",
+            "-of", "json",# output format as JSON.
             file_path
-        ]
+        ]                                       
 
-        # Run ffprobe and capture JSON output
-        process = subprocess.run(
-            cmd,
+        
+        process = subprocess.run(              # Run ffprobe and capture JSON output.
+            cmd,    
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
@@ -101,10 +101,10 @@ def video_properties(file_path: str):
 
         info = json.loads(process.stdout or "{}")
 
-        # Extract duration
-        duration = float(info.get("format", {}).get("duration", 0.0))
+      
+        duration = float(info.get("format", {}).get("duration", 0.0)) # Extract duration.
 
-        # Extract video stream info
+        # Extract video stream info. 
         width, height, codec = 0, 0, ""
         if "streams" in info and len(info["streams"]) > 0:
             first_stream = info["streams"][0]
@@ -112,15 +112,15 @@ def video_properties(file_path: str):
             height = first_stream.get("height", 0)
             codec = first_stream.get("codec_name", "").lower()
 
+        # Update the results.
         result.update({
             "duration": duration,
             "width": width,
             "height": height,
             "codec": codec,
-            # Validation
-            "duration_ok": duration > 1.0,  # video must last > 1s
-            "resolution_ok": width >= 480 and height >= 360,  # at least 480p
-            "codec_ok": codec in ("h264", "hevc", "vp9")  # accepted codecs
+            "duration_ok": duration > 1.0,                      # video must last > 1s.
+            "resolution_ok": width >= 480 and height >= 360,    # at least 480p.
+            "codec_ok": codec in ("h264", "hevc", "vp9")        # accepted codecs.
         })
 
     except subprocess.CalledProcessError as e:
@@ -132,19 +132,20 @@ def video_properties(file_path: str):
     return result
 
 def duplicates(videos: dict):
-    md5_seen = {}
-    duplicates = []
+    """Identify duplicate videos by comparing their MD5 hashes."""
+    md5_seen = {}      # Store MD5 hash of the images.
+    duplicates = []    # Store names of the duplicate images.
 
     for name, data in videos.items():
         md5 = hashlib.md5(data).hexdigest()
         if md5 in md5_seen:
-            duplicates.append(name)  # store the duplicate name
+            duplicates.append(name)  
         else:
             md5_seen[md5] = name
 
-    # Return the set of duplicates
     return set(duplicates)
 
+"""Function to apply the validation process to all videos from the formatted zone, saving the output in the trusted zone or in the rejected zone:"""
 
 def process_videos(client):
     keys: List[str] = list(list_objects(client, config.FORMATTED_BUCKET, config.FORMATTED_VIDEO_PATH))
@@ -155,7 +156,7 @@ def process_videos(client):
 
     all_videos = {}
 
-    # First, load the videos
+    # Download all images and store them in the all_videos dictionary showing the progress.
     with ProgressBar(
         total=len(keys),
         description="Loading videos",
@@ -171,17 +172,18 @@ def process_videos(client):
             all_videos[key] = data
             progress.update(1)
 
-    # Then, validate them.
+
+    # Split images into valid and invalid sets showing the progress.
     valid_videos = {}
     invalid_videos = {}
-
+    
     with ProgressBar(
         total=len(all_videos),
         description="Validating videos",
         unit="file",
         unit_scale=False,
     ) as progress:
-        for name, data in all_videos.items():
+        for name, data in all_videos.items(): # Run through all videos, checking the properties of each one
             progress.set_description(f"Validating {Path(name).name}", refresh=False)
             with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmp:
                 tmp.write(data)
@@ -203,12 +205,13 @@ def process_videos(client):
                 invalid_videos[name] = ", ".join(reasons)
             progress.update(1)
 
-    dupes = duplicates(valid_videos)
+    dupes = duplicates(valid_videos) # Check duplicates in the valid_videos set.
 
-    # Lastly, we upload the valid ones.
+    
     uploaded_trusted = 0
     uploaded_rejected = 0
 
+    # Upload the valid and non-duplicate videos with the metadata in the trusted bucket, showing the progress.
     if valid_videos:
         with ProgressBar(
             total=len(valid_videos),
@@ -248,6 +251,7 @@ def process_videos(client):
                 os.remove(temp_path)
                 progress.update(1)
 
+    # Upload the invalid videos with the metadata to the rejected bucket, showing the progress.
     if invalid_videos:
         rejected_report = {}
         with ProgressBar(
@@ -287,7 +291,7 @@ def process_videos(client):
 
                 rejected_report.setdefault(reason, []).append(dst_key)
                 progress.update(1)
-
+        # Summary of the amount of videos stored in the rejected bucket and the reason.
         print("\nREJECTION REPORT")
         for reason, files in rejected_report.items():
             count = len(files)
@@ -295,10 +299,12 @@ def process_videos(client):
     else:
         print("\nNo rejected videos.")
 
+    # Amount of videos in each zone.
     print(f"\nUploaded to Trusted: {uploaded_trusted}")
     print(f"Uploaded to Rejected: {uploaded_rejected}")
 
 def main():
+    """Main entry point: process all videos, apply validation rules, and display progress."""
     try:
         client = get_minio_client()
         process_videos(client)

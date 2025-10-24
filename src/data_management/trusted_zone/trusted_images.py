@@ -195,7 +195,7 @@ def process_images(client):
     uploaded_rejected = 0
     rejected_report = {}
 
-    # Upload valid and non-duplicate images to trusted showing the progress.
+    # Upload valid and non-duplicate images to trusted with the metadata, showing the progress.
     if valid_images:
         with ProgressBar(
             total=len(valid_images),
@@ -227,7 +227,7 @@ def process_images(client):
                 uploaded_trusted += 1
                 progress.update(1)
 
-    # Upload invalid images to the rejected bucket showing the progress.
+    # Upload invalid images with the metadata to the rejected bucket showing the progress.
     if invalid_images:
         with ProgressBar(
             total=len(invalid_images),
@@ -257,13 +257,14 @@ def process_images(client):
                 rejected_report.setdefault(reason, []).append(dst_key)
                 progress.update(1)
 
-        # Suummary of the amount of images stored in the rejected buscket and the reason.
+        # Summary of the amount of images stored in the rejected bucket and the reason.
         print("\nREJECTION REPORT")
         for reason, files in rejected_report.items():
             print(f" - {reason}: {len(files)} image(s) rejected")
     else:
         print("\nNo rejected images.")
 
+    # Amount of images in each zone.
     print(f"\nUploaded to Trusted: {uploaded_trusted}")
     print(f"Uploaded to Rejected: {uploaded_rejected}")
 
@@ -278,7 +279,7 @@ def process_images(client):
 
 
 def main():
-    """Main entry point: process all images, apply restrictions, and show progress."""
+    """Main entry point: process all images, apply validation rules, and display progress."""
     try:
         client = get_minio_client()
         process_images(client)
