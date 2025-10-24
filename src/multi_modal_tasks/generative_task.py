@@ -8,7 +8,9 @@ import google.generativeai as genai
 import warnings
 from chromadb.utils import embedding_functions as ef
 from src.common.chroma_client import get_client, get_text_collection, get_image_collection
+from minio.error import S3Error
 
+from src.common.minio_client import get_minio_client
 # ============================================================
 # 🔹 Configuración general y silenciamiento de warnings
 # ============================================================
@@ -35,11 +37,11 @@ TEXT_MODEL_NAME = os.getenv("TEXT_MODEL_NAME", "sentence-transformers/all-MiniLM
 text_ef = ef.SentenceTransformerEmbeddingFunction(model_name=TEXT_MODEL_NAME)
 image_ef = ef.OpenCLIPEmbeddingFunction()
 
-genai.configure()  # Usa tu GOOGLE_API_KEY del entorno
+genai.configure(api_key="AIzaSyD8De0Y6Dqy19AHe-Kmd549uNRaqtbll6g")  # Usa tu GOOGLE_API_KEY del entorno
 
 MODEL_ID =  "models/gemini-2.5-flash"     # Puedes cambiar a "models/gemini-2.5-pro" si lo deseas
 model = genai.GenerativeModel(MODEL_ID)
-
+image_model = genai.GenerativeModel("models/gemini-2.5-flash-image")
 # ============================================================
 # 🔹 2️⃣ Funciones auxiliares
 # ============================================================
@@ -67,6 +69,41 @@ def retrieve_from_chroma(col_text, col_img, text_emb, image_emb, k_text=2, k_img
     )
     return res_text, res_img
 
+
+import src.common.global_variables as config  # 👈 para acceder a TRUSTED_BUCKET
+
+def get_images_from_minio_for_gemini(res_img):
+    """Lee las imágenes recuperadas desde Chroma (en el bucket trusted-zone) y devuelve inline_data listo para Gemini."""
+    client_s3 = get_minio_client()
+    image_parts = []
+
+    for meta in res_img.get("metadatas", [[]])[0]:
+        source_key = meta.get("source_key")
+        if not source_key:
+            continue
+
+        try:
+            # ⚡ Usamos el bucket global de tu config, no del metadata
+            bucket = config.TRUSTED_BUCKET  # = "trusted-zone"
+            mime_type = "image/png"         # puedes mejorarlo si luego guardas esto en metadata
+
+            # 📥 Descargar desde MinIO
+            response = client_s3.get_object(bucket, source_key)
+            data = response.read()
+            response.close()
+            response.release_conn()
+
+            # (Opcional) validar que sea imagen
+            Image.open(io.BytesIO(data)).verify()
+
+            # ✅ Parte lista para Gemini
+            image_parts.append({"inline_data": {"mime_type": mime_type, "data": data}})
+
+        except Exception as e:
+            print(f" Error descargando {source_key} desde MinIO ({bucket}): {e}")
+
+    return image_parts
+
 def build_prompt(user_query, res_text, res_img):
     system_prompt = (
         "You are a chef sharing cooking idea using the text and images found in a friendly tone." )
@@ -87,8 +124,7 @@ def build_prompt(user_query, res_text, res_img):
     user_prompt = (
         f"User is asking for: '{user_query}'.\n\n"
         f"Here are some related recipes retrieved from our database:\n{recipes}\n"
-        f"And also some related images from our collection:\n{images}\n"
-        f"Using this information suggest cooking techniques provide some images."
+        f"Using this information and  images suggest some recipes."
     )
 
     return system_prompt, user_prompt, image_paths
@@ -96,136 +132,105 @@ def build_prompt(user_query, res_text, res_img):
 # ============================================================
 # 🔹 3️⃣ Generación con Gemini
 # ============================================================
+def generate_response_gemini(system_prompt, user_prompt, extra_images=None, mime_type="image/png"):
+    """
+    Genera una respuesta con Gemini usando:
+      - texto (system_prompt + user_prompt)
+      - imágenes recuperadas desde tu base de datos (extra_images)
+    No usa la imagen del usuario.
+    """
 
-def generate_response_gemini(query_image, system_prompt, user_prompt, mime_type="image/png"):
-    buf = io.BytesIO()
-    fmt = "PNG" if mime_type.endswith("png") else "JPEG"
-    query_image.save(buf, format=fmt)
-    image_bytes = buf.getvalue()
-    
+    # 🔹 1️⃣ Construir las partes del mensaje multimodal
+    parts = [{"text": system_prompt}]
 
-    contents = [
-        {
-            "role": "user",
-            "parts": [
-                {"text": system_prompt},
-                {"inline_data": {"mime_type": mime_type, "data": image_bytes}},
-                {"text": user_prompt},
-            ],
-        }
-    ]
+    # 🔹 2️⃣ Añadir las imágenes recuperadas desde MinIO
+    if extra_images and len(extra_images) > 0:
+        print(f" Adding the {len(extra_images)} images selected from the collection.")
+        parts.extend(extra_images)
+    else:
+        print("We could not find images.")
 
-    try:
-        response = model.generate_content(
-            contents=contents,
-            generation_config={"max_output_tokens": 200},
-            safety_settings=[
-                {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
-                {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
-                {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
-                {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
-            ],
-        )
-    except Exception as e:
-        print(f" Error calling Gemini: {e}")
-        return "Gemini request failed."
+    # 🔹 3️⃣ Añadir el texto del usuario al final
+    parts.append({"text": user_prompt})
 
-    # 🔹 Extrae texto manualmente (sin .text)
-    text_parts = []
+    # 🔹 4️⃣ Contenido final
+    contents = [{"role": "user", "parts": parts}]
+
+    # 🔹 5️⃣ Llamada al modelo Gemini
+    response = model.generate_content(
+        contents=contents,
+        generation_config={"max_output_tokens": 500},
+    )
+
+    # 🔹 6️⃣ Extraer texto generado
+    text_output = ""
     if hasattr(response, "candidates") and response.candidates:
-        for candidate in response.candidates:
-            if hasattr(candidate, "content") and hasattr(candidate.content, "parts"):
-                for part in candidate.content.parts:
-                    if hasattr(part, "text"):
-                        text_parts.append(part.text)
+        for c in response.candidates:
+            if hasattr(c, "content") and hasattr(c.content, "parts"):
+                for p in c.content.parts:
+                    if hasattr(p, "text"):
+                        text_output += p.text + "\n"
 
-    if text_parts:
-        return "\n".join(text_parts)
-
-    # 🚨 Si no hay texto, imprime diagnóstico y reformula
-    print("Gemini did not return valid text.")
-    if hasattr(response, "candidates") and response.candidates:
-        c = response.candidates[0]
-        print("🔍 Finish reason:", getattr(c, "finish_reason", "unknown"))
-        print("🔍 Safety ratings:", getattr(c, "safety_ratings", "none"))
-    print("🪶 Prompt feedback:", getattr(response, "prompt_feedback", "none"))
-
-    blocked_terms = ["pork", "bacon", "ham"]
-    safe_prompt = user_prompt
-    for term in blocked_terms:
-        safe_prompt = safe_prompt.replace(term, "slow-cooked shredded meat")
-
-    if safe_prompt != user_prompt:
-        print("♻️ Reformulating prompt to avoid safety block...")
-        return generate_response_gemini(query_image, system_prompt, safe_prompt, mime_type)
-
-    return "Gemini blocked this request."
+    return text_output.strip() or " No response generated by Gemini."
 
 
-"""
-def generate_image_with_gemini(base_images, text_prompt, output_name="rag_generated_image.png"):
 
-    Genera una nueva imagen combinando imágenes de referencia + texto del RAG.
-    Soporta imágenes locales o almacenadas en MinIO.
+def generate_image_from_database(res_text, res_img, user_image_path=None, output_name="db_generated_image.png"):
+    """
+    Genera una imagen usando:
+      - los textos recuperados desde tu base de datos (res_text)
+      - las imágenes recuperadas desde MinIO (res_img)
+      - y opcionalmente la imagen del usuario (user_image_path)
+    Usa el modelo Gemini-2.5-flash-image.
+    """
 
-    Args:
-        base_images (list[str]): rutas locales o rutas en MinIO (ej. "trusted/image_data/...").
-        text_prompt (str): descripción generada por el RAG.
-        output_name (str): nombre del archivo de salida.
 
-    Returns:
-        str | None: ruta local del archivo generado o None si falla.
+    # 🔹 1️⃣ Extraer texto desde tu base (res_text)
+    db_text = ""
+    for doc, meta in zip(res_text.get("documents", [[]])[0], res_text.get("metadatas", [[]])[0]):
+        title = meta.get("title", "") if meta else ""
+        snippet = doc.strip().replace("\n", " ")
+        db_text += f"{title}\n{snippet}\n\n"
 
-    genai.configure()
-    image_model = genai.GenerativeModel("models/gemini-2.5-flash-image")
-    
-    from src.common.minio_client import get_minio_client
-    client_s3 = get_minio_client()
-    image_parts = []
+    if not db_text.strip():
+        db_text = "Cooking recipes retrieved from database."
 
-    for path in base_images:
-        img = None
+    # 🔹 2️⃣ Obtener imágenes recuperadas desde MinIO
+    base_images = get_images_from_minio_for_gemini(res_img)
+    print(f"📦 {len(base_images)} imágenes recuperadas desde MinIO para Gemini.")
+
+    # 🔹 3️⃣ Añadir la imagen del usuario (opcional)
+    if user_image_path and os.path.exists(user_image_path):
         try:
-            # --- 🔹 Detectar si la imagen viene de MinIO o del sistema local ---
-            if os.path.exists(path):
-                img = Image.open(path).convert("RGB")
-            else:
-                # Si no existe localmente, intenta descargar desde MinIO
-                bucket = config.TRUSTED_BUCKET
-                # Normaliza el nombre del objeto (quita prefijos incorrectos)
-                object_name = path.replace("trusted/", "").lstrip("/")
-                response = client_s3.get_object(bucket, object_name)
-                img = Image.open(io.BytesIO(response.read())).convert("RGB")
-                response.close()
-                response.release_conn()
-
-            # --- 🔹 Convertir a bytes PNG ---
+            img = Image.open(user_image_path).convert("RGB")
             buf = io.BytesIO()
             img.save(buf, format="PNG")
             image_bytes = buf.getvalue()
-            image_parts.append({"inline_data": {"mime_type": "image/png", "data": image_bytes}})
-
+            base_images.append({"inline_data": {"mime_type": "image/png", "data": image_bytes}})
+            print("👤 Imagen del usuario añadida como referencia visual.")
         except Exception as e:
-            print(f"⚠️ No se pudo procesar {path}: {e}")
+            print(f"⚠️ No se pudo procesar la imagen del usuario: {e}")
 
-    if not image_parts:
-        print("⚠️ No valid images found for generation.")
+    if not base_images:
+        print("⚠️ No hay imágenes disponibles para generar una nueva.")
         return None
 
-    # --- 🔹 Construir prompt multimodal ---
+    # 🔹 4️⃣ Construir prompt textual basado solo en los textos de tu base
+    prompt_text = (
+        "Using the following recipes and the reference images provided, "
+        "generate a realistic, appetizing, high-quality image that visually represents these dishes:\n\n"
+        f"{db_text}"
+    )
+
     contents = [{
         "role": "user",
         "parts": [
-            *image_parts,
-            {"text": f"Using these reference images, create a realistic and appetizing photo illustrating: {text_prompt}"}
+            *base_images,
+            {"text": prompt_text},
         ]
     }]
 
-    # --- 🔹 Definir ruta de salida ---
-    base_dir = os.path.dirname(base_images[0]) if base_images else os.getcwd()
-    out_path = os.path.join(base_dir, output_name)
-
-    # --- 🔹 Llamar a Gemini ---
+    # 🔹 5️⃣ Llamar al modelo Gemini
     try:
         response = image_model.generate_content(contents=contents)
 
@@ -233,28 +238,46 @@ def generate_image_with_gemini(base_images, text_prompt, output_name="rag_genera
             for part in response.candidates[0].content.parts:
                 if hasattr(part, "inline_data") and hasattr(part.inline_data, "data"):
                     out_bytes = part.inline_data.data
+                    out_path = os.path.join(os.getcwd(), output_name)
                     with open(out_path, "wb") as f:
                         f.write(out_bytes)
-                    print(f"✅ Image generated successfully: {out_path}")
+                    print(f"✅ Imagen generada exitosamente: {out_path}")
                     return out_path
 
-        print("⚠️ Gemini did not return any image.")
+        print("⚠️ Gemini no devolvió una imagen.")
         return None
 
     except Exception as e:
-        print(f"❌ Error generating image with Gemini: {e}")
+        print(f"❌ Error generando imagen con Gemini: {e}")
         return None
-"""
+
+
 # ============================================================
 # 🔹 4️⃣ Pipeline completo RAG
 # ============================================================
 
 def rag_pipeline(user_query: str, image_path: str):
+    # 🔹 1️⃣ Crear embeddings
     text_emb = get_text_embedding(user_query)
-    image_emb, query_image = get_image_embedding(image_path)
+    image_emb, _ = get_image_embedding(image_path)
+
+    # 🔹 2️⃣ Recuperar resultados de Chroma (texto + imágenes)
     res_text, res_img = retrieve_from_chroma(col_text, col_img, text_emb, image_emb)
+
+    # 🔹 3️⃣ Construir el prompt textual
     system_prompt, user_prompt, image_paths = build_prompt(user_query, res_text, res_img)
-    response = generate_response_gemini(query_image, system_prompt, user_prompt, mime_type="image/png")
+
+    # 🔹 4️⃣ Descargar imágenes desde MinIO
+    extra_images = get_images_from_minio_for_gemini(res_img)
+
+    # 🔹 5️⃣ Generar respuesta con texto + tus imágenes
+    response = generate_response_gemini(
+        system_prompt=system_prompt,
+        user_prompt=user_prompt,
+        extra_images=extra_images
+    )
+    generate_image_from_database(res_text, res_img, user_image_path=image_path)
+
     return response, image_paths
 
 # ============================================================
@@ -262,10 +285,10 @@ def rag_pipeline(user_query: str, image_path: str):
 # ============================================================
 
 if __name__ == "__main__":
-    query = "Suggest dishes with slow-cooked shredded meat"
-    image_path = r"C:\Users\adals\OneDrive\Documentos\Master\ADSDB-Project\avocado.jpg"
+    query = "Suggest dishes with pulled pork"
+    image_path = r"C:\Users\adals\OneDrive\Documentos\Master\ADSDB-Project\pulled_pork.png"
 
-    print("\n Executing RAG pipeline...\n")
+    print("\n Executing RAG pipeline:\n")
 
     answer, image_paths = rag_pipeline(query, image_path)
 
@@ -276,5 +299,5 @@ if __name__ == "__main__":
     for p in image_paths:
         print(f"- {p}")
 
-    print("\n Generating illustrative image from RAG output...")
+    #print("\n Generating illustrative image from RAG output...")
     #generate_image_with_gemini(image_paths, answer)

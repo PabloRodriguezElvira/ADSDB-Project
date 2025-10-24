@@ -14,21 +14,24 @@ from src.common.progress_bar import ProgressBar
 
 
 def list_objects(client, bucket, prefix) -> Iterable[str]:
+    """List all objects from a given MinIO bucket and prefix."""
     for obj in client.list_objects(bucket, prefix=prefix, recursive=True):
         if not obj.object_name.endswith("/"):
             yield obj.object_name
 
 
 def dst_key_for(src_key: str, dst_prefix: str):
+    """Generate the destination key (path) for the trusted text."""
     if src_key.startswith(config.FORMATTED_IMAGE_PATH):
         dst_key = src_key.replace(config.FORMATTED_IMAGE_PATH, dst_prefix, 1)
     else:
         dst_key = os.path.join(dst_prefix, os.path.basename(src_key))
     return dst_key
 
+"""Functions to validate image integrity and quality by checking format, size, color mode, brightness, and contrast:"""
 
-# checking out if we are able to open all the images
 def is_image_valid(data: bytes):
+    """Check if the image data is valid and not corrupted."""
     try:
         img = Image.open(io.BytesIO(data))
         img.verify()
@@ -37,8 +40,8 @@ def is_image_valid(data: bytes):
         return False
 
 
-# check image properties
 def image_properties(data: bytes, expected_size=(512, 512)):
+    """Check if the image meets expected format, size, and color mode requirements."""
     result = {
         "format": None,
         "size": None,
@@ -48,7 +51,7 @@ def image_properties(data: bytes, expected_size=(512, 512)):
         "format_ok": False,
         "error": None,
     }
-    # let's check if the images meet the expected characteristics
+    
     try:
         with Image.open(io.BytesIO(data)) as img:
             img.load()
@@ -57,13 +60,13 @@ def image_properties(data: bytes, expected_size=(512, 512)):
             result["size"] = img.size
             result["color"] = img.mode
 
-            if img.size == expected_size:
+            if img.size == expected_size:   # Check if image dimensions match expected size (512x512).
                 result["size_ok"] = True
 
-            if img.mode in ("RGB", "RGBA"):
+            if img.mode in ("RGB", "RGBA"): # Accept only RGB or RGBA color modes.
                 result["color_ok"] = True
 
-            if img.format == "PNG":
+            if img.format == "PNG":         # Accept only PNG image format.       
                 result["format_ok"] = True
 
     except Exception as e:
@@ -72,12 +75,12 @@ def image_properties(data: bytes, expected_size=(512, 512)):
     return result
 
 
-# Image properties
 def brightness_and_contrast(data: bytes):
-    img = Image.open(io.BytesIO(data)).convert("L")  # grey scale
-    stat = ImageStat.Stat(img)  # create an object with image features
-    brightness = stat.mean[0] / 255.0  # normalized mean brightness
-    contrast = stat.stddev[0] / 255.0  # normalized contrast
+    """Calculate image brightness and contrast, and check if they are within acceptable ranges."""
+    img = Image.open(io.BytesIO(data)).convert("L")  # Convert image to grayscale.
+    stat = ImageStat.Stat(img)                       # Compute image statistics.
+    brightness = stat.mean[0] / 255.0                # Normalize average brightness to [0, 1].
+    contrast = stat.stddev[0] / 255.0                # Normalize contrast (standard deviation) to [0, 1].
 
     return {
         "brightness": round(brightness, 3),
@@ -86,19 +89,19 @@ def brightness_and_contrast(data: bytes):
         "contrast_ok": contrast >= 0.2,
     }
 
-
-# Combine validation functions
 def validate_images(images: dict):
+    """Apply the above functions to check if the image is valid or not and store it in a valid or invalid images dictionary"""
     valid_images = {}
     invalid_images = {}
 
+
     for name, data in images.items():
         if not is_image_valid(data):
-            invalid_images[name] = "Corrupt or unreadable"
+            invalid_images[name] = "Corrupt or unreadable"  # check if it's readable
             continue
 
-        props = image_properties(data)
-        bright = brightness_and_contrast(data)
+        props = image_properties(data)                      # size, format and color
+        bright = brightness_and_contrast(data)              # brightness and contrast
 
         if (
             props["size_ok"]
@@ -126,55 +129,35 @@ def validate_images(images: dict):
 
 
 def duplicates(images: dict):
-    
-    md5_seen = {}# md5:name of unique images
-    duplicates = []# the names of the images in which its hash is already in md5_map
-    #hashes = {} names of name:hash 
-
+    """Identify duplicate images by comparing their MD5 hashes."""
+    md5_seen = {}   # Store MD5 hash of the images.
+    duplicates = [] # Store names of the duplicate images.
+     
     for name, data in images.items():
         md5 = hashlib.md5(data).hexdigest()
-        #hashes[name] = md5
         if md5 in md5_seen:
             duplicates.append(name)
         else:
             md5_seen[md5] = name
 
-    #unique_count = len(images) - len(duplicates)
     return set(duplicates)
-    #return {
-       # return set(duplicates)
-        #"duplicates": duplicates,
-        #"unique_count": unique_count,
-        #"hashes": hashes,
-    #}
 
 
 def count_images_by_food(images: dict):
-
+    """Count how many images exist for each food category based on image filenames."""
     counts = {}
     for name in images.keys():
         base = os.path.basename(name)
-
-        # 1️⃣ Quitar extensión .png
-        food = re.sub(r"\.png$", "", base, flags=re.IGNORECASE)
-
-        # 2️⃣ Quitar la parte de tipo de conjunto (training, validation, evaluation)
-        food = re.sub(r"-(training|validation|evaluation)", "", food, flags=re.IGNORECASE)
-
-        # 3️⃣ Quitar números al final o intermedios (como -192 o -3321)
-        food = re.sub(r"-?\d+$", "", food)
-
-        # 4️⃣ Reemplazar guiones por espacios y limpiar
-        food = food.replace("-", " ").strip()
-
-        # 5️⃣ Normalizar capitalización
-        food = food.capitalize()
-
-        # 6️⃣ Contar
-        counts[food] = counts.get(food, 0) + 1
+        food = re.sub(r"\.png$", "", base, flags=re.IGNORECASE) # Remove from the image name the png extension.
+        food = re.sub(r"-(training|validation|evaluation)", "", food, flags=re.IGNORECASE) # Remove the group where they belong.
+        food = re.sub(r"-?\d+$", "", food)                      # Remove the number.
+        food = food.replace("-", " ").strip()                   # Remove begin and end spaces.
+        food = food.capitalize()                                # Capitalize the name.
+        counts[food] = counts.get(food, 0) + 1                  # Increase the image counter.
 
     return counts
 
+"""Function to apply the validation process to all images from the formatted zone, saving the output in the trusted zone or in the rejected zone:"""
 
 def process_images(client):
     keys: List[str] = list(list_objects(client, config.FORMATTED_BUCKET, config.FORMATTED_IMAGE_PATH))
@@ -185,7 +168,7 @@ def process_images(client):
 
     all_images = {}
 
-    # First, we load the images
+    # Download all images and store them in the all_images dictionary showing the progress.
     with ProgressBar(
         total=len(keys),
         description="Loading images",
@@ -201,20 +184,18 @@ def process_images(client):
             all_images[key] = data
             progress.update(1)
 
-    # Validate images
+   # Split images into valid and invalid sets, and identify duplicates in the valid set.
     validated = validate_images(all_images)
     valid_images = validated["valid"]
     invalid_images = validated["invalid"]
 
-    # Detect duplicates in the valid images
     duplicate_names = duplicates(valid_images)
-    #duplicate_names = set(duplicates_report["duplicates"])
-
+    
     uploaded_trusted = 0
     uploaded_rejected = 0
     rejected_report = {}
 
-    # Upload valid and non-duplicate images to trusted
+    # Upload valid and non-duplicate images to trusted showing the progress.
     if valid_images:
         with ProgressBar(
             total=len(valid_images),
@@ -246,6 +227,7 @@ def process_images(client):
                 uploaded_trusted += 1
                 progress.update(1)
 
+    # Upload invalid images to the rejected bucket showing the progress.
     if invalid_images:
         with ProgressBar(
             total=len(invalid_images),
@@ -272,10 +254,10 @@ def process_images(client):
                 )
                 uploaded_rejected += 1
 
-                # Keep it for the final report
                 rejected_report.setdefault(reason, []).append(dst_key)
                 progress.update(1)
 
+        # Suummary of the amount of images stored in the rejected buscket and the reason.
         print("\nREJECTION REPORT")
         for reason, files in rejected_report.items():
             print(f" - {reason}: {len(files)} image(s) rejected")
@@ -285,7 +267,7 @@ def process_images(client):
     print(f"\nUploaded to Trusted: {uploaded_trusted}")
     print(f"Uploaded to Rejected: {uploaded_rejected}")
 
-    # Report of the amount of types of images we have in the trusted bucket per group
+    # Report of the amount of food types of images there are in the trusted bucket per group.
     food_counts = count_images_by_food(valid_images)
     print("\n Validated images per food type:")
     if not food_counts:
@@ -296,6 +278,7 @@ def process_images(client):
 
 
 def main():
+    """Main entry point: process all images, apply restrictions, and show progress."""
     try:
         client = get_minio_client()
         process_images(client)

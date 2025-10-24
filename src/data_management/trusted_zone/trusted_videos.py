@@ -16,20 +16,23 @@ from src.common.progress_bar import ProgressBar
 
 
 def list_objects(client, bucket, prefix) -> Iterable[str]:
+    """List all objects from a given MinIO bucket and prefix."""
     for obj in client.list_objects(bucket, prefix=prefix, recursive=True):
         if not obj.object_name.endswith("/"):
             yield obj.object_name
 
 def dst_key_for(src_key: str, dst_prefix: str):
+    """Generate the destination key (path) for the trusted text."""
     if src_key.startswith(config.FORMATTED_VIDEO_PATH):
         dst_key = src_key.replace(config.FORMATTED_VIDEO_PATH, dst_prefix, 1)
     else:
         dst_key = os.path.join(dst_prefix, os.path.basename(src_key))
     return dst_key
 
+"""Functions to validate video integrity and quality by checking duration, width, height, codec:"""
 
 def is_video_valid(file_path: str):
-    """Check if ffprobe can read the video file (basic integrity test)."""
+    """Check if ffprobe can read the video."""
     try:
         
         ffprobe_path = shutil.which("ffprobe")
@@ -49,14 +52,13 @@ def is_video_valid(file_path: str):
             text=True,               # decode output as text
             check=True               # if ffprobe fails, raise CalledProcessError
         )
-        return True  # ffprobe could read it, so it's valid
+        return True                  # ffprobe could read it, so it's valid
 
     except subprocess.CalledProcessError:
-        # ffprobe failed (file not readable or corrupted)
-        return False
+        return False                 # ffprobe failed (file not readable or corrupted)
 
     except FileNotFoundError as e:
-        print(f"[ERROR] {e}")
+        print(f"[ERROR] {e}")        # ffprobe not installed or not in PATH
         return False
 
 
