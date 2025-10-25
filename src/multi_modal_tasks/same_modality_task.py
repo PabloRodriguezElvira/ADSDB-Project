@@ -8,13 +8,15 @@ from PIL import Image, UnidentifiedImageError
 
 from src.common.chroma_client import (
     get_client,
-    get_image_collection,
     get_text_collection,
+    get_image_collection,
+    get_video_collection,
     _text_ef,
     _image_ef,
 )
 from src.data_management.exploitation_zone.exploitation_videos import (
     extract_frames_from_file,
+    _compute_average_embedding,
 )
 import src.common.global_variables as config
 
@@ -23,6 +25,7 @@ import src.common.global_variables as config
 client = get_client()
 col_text = get_text_collection(client)
 col_img = get_image_collection(client)
+col_video = get_video_collection(client)
 BASE_DIR = Path(__file__).resolve().parents[2]  # Project root
 
 
@@ -111,58 +114,6 @@ def _extract_frames(
     return frames
 
 
-def _aggregate_video_matches(
-    frames: List[Tuple[int, float, np.ndarray]],
-    raw: Dict[str, List[Any]],
-    *,
-    limit: int,
-) -> List[Dict[str, Any]]:
-
-    """Aggregate frame-level matches into video-level results."""
-    matches: Dict[str, Dict[str, Any]] = {}
-    ids_lists = raw.get("ids", [])
-    distances_lists = raw.get("distances", [])
-    metadata_lists = raw.get("metadatas", [])
-
-    for frame_idx, frame_matches in enumerate(ids_lists):
-        if frame_idx >= len(frames):
-            break
-        query_frame_idx, query_timestamp_s, _ = frames[frame_idx]
-        metadata_list = metadata_lists[frame_idx] if frame_idx < len(metadata_lists) else []
-        distances_list = distances_lists[frame_idx] if frame_idx < len(distances_lists) else []
-
-        for match_pos, match_id in enumerate(frame_matches):
-            metadata = metadata_list[match_pos] if match_pos < len(metadata_list) else {}
-            distance_raw = distances_list[match_pos] if match_pos < len(distances_list) else None
-            try:
-                distance = float(distance_raw) if distance_raw is not None else float("inf")
-            except (TypeError, ValueError):
-                distance = float("inf")
-
-            video_key = metadata.get("video_key") or metadata.get("source_key") or match_id
-            entry = matches.setdefault(
-                video_key,
-                {
-                    "video_key": video_key,
-                    "best_distance": float("inf"),
-                    "matches": [],
-                },
-            )
-            entry["best_distance"] = min(entry["best_distance"], distance)
-            entry["matches"].append(
-                {
-                    "id": match_id,
-                    "distance": distance,
-                    "metadata": metadata,
-                    "query_frame_idx": query_frame_idx,
-                    "query_timestamp_s": query_timestamp_s,
-                }
-            )
-
-    sorted_results = sorted(matches.values(), key=lambda item: item["best_distance"])
-    return sorted_results[:limit]
-
-
 def _flatten_query_list(items: Optional[List[Any]]) -> List[Any]:
     """Return the first nested list (if any) or a flat list to ease formatting."""
     if not items:
@@ -234,27 +185,29 @@ def _format_image_results_for_display(raw_results: Dict[str, List[Any]]) -> str:
     return "\n\n".join(sections)
 
 
-def _format_video_results_for_display(video_results: List[Dict[str, Any]]) -> str:
-    """Summarize video matches including their best score and a sample frame."""
-    if not video_results:
+def _format_video_results_for_display(raw_results: Dict[str, List[Any]]) -> str:
+    """Format video retrieval output (one embedding per video) for display."""
+    ids = _flatten_query_list(raw_results.get("ids"))
+    metadatas = _flatten_query_list(raw_results.get("metadatas"))
+    distances = _flatten_query_list(raw_results.get("distances"))
+
+    if not ids and not metadatas:
         return "No se encontraron vídeos similares."
 
     sections: List[str] = []
-    for idx, entry in enumerate(video_results, start=1):
-        lines = [
-            f"Video {idx}",
-            f"Video key: {entry.get('video_key')}",
-            f"Mejor distancia: {entry.get('best_distance')}",
-            f"Total coincidencias de frames: {len(entry.get('matches', []))}",
-        ]
-        matches = entry.get("matches", [])
-        if matches:
-            best = matches[0]
-            lines.append(
-                "Coincidencia destacada: "
-                f"id={best.get('id')}, distancia={best.get('distance')}, "
-                f"frame={best.get('query_frame_idx')} (t={best.get('query_timestamp_s')}s)"
-            )
+    total = max(len(ids), len(metadatas), len(distances), 1)
+    for idx in range(total):
+        lines = [f"Video {idx + 1}"]
+        if idx < len(ids) and ids[idx] is not None:
+            lines.append(f"ID: {ids[idx]}")
+        if idx < len(distances):
+            try:
+                distance_value = float(distances[idx])
+                lines.append(f"Distancia: {distance_value:.4f}")
+            except (TypeError, ValueError):
+                lines.append(f"Distancia: {distances[idx]}")
+        if idx < len(metadatas) and metadatas[idx] is not None:
+            lines.append(f"Metadatos: {metadatas[idx]}")
         sections.append("\n".join(lines))
 
     return "\n\n".join(sections)
@@ -267,7 +220,6 @@ def find_similar_same_modality(
     k: int = 5,
     frame_interval_s: float = 1.0,
     max_frames: int = 24,
-    k_per_frame: Optional[int] = None,
 ):
     """
     Encode a text, image, or video using the configured Chroma embedding functions and
@@ -301,22 +253,13 @@ def find_similar_same_modality(
             frame_interval_s=frame_interval_s,
             max_frames=max_frames,
         )
-        if not frames:
-            return []
-
-        if k_per_frame is None:
-            k_per_frame = max(k, 5)
-        if k_per_frame <= 0:
-            raise ValueError("k_per_frame must be greater than zero.")
-
         frame_arrays = [frame for _, _, frame in frames]
-        print("LEN: ", col_img.count())
-        raw = col_img.query(
-            query_images=frame_arrays,
-            n_results=k_per_frame,
+        video_embedding = _compute_average_embedding(frame_arrays)
+        return col_video.query(
+            query_embeddings=[video_embedding],
+            n_results=k,
             include=["metadatas", "distances"],
         )
-        return _aggregate_video_matches(frames, raw, limit=k)
 
     raise ValueError(f"Unsupported modality '{modality}'. Expected 'text', 'image', or 'video'.")
 
@@ -339,7 +282,6 @@ def find_similar_videos(
     video: Union[str, Path],
     *,
     k_video: int = 5,
-    k_per_frame: Optional[int] = None,
     frame_interval_s: float = 1.0,
     max_frames: int = 24,
 ):
@@ -350,7 +292,6 @@ def find_similar_videos(
         k=k_video,
         frame_interval_s=frame_interval_s,
         max_frames=max_frames,
-        k_per_frame=k_per_frame,
     )
 
 
@@ -367,14 +308,13 @@ if __name__ == "__main__":
         image_results = find_similar_images(image_path, k_image=10)
         results = _format_image_results_for_display(image_results)
     elif selected_modality == "video":
-        video = "tomates.mp4"
+        video = "leche.mp4"
         video_path = (BASE_DIR / f"{config.VIDEO_QUERY_PATH}{video}").resolve()
         video_results = find_similar_videos(
             video_path,
             k_video=1,
             frame_interval_s=1.0,
             max_frames=50,
-            k_per_frame=None,
         )
         results = _format_video_results_for_display(video_results)
     else:
