@@ -9,6 +9,7 @@ import src.common.global_variables as config
 DB_PATH = Path(os.getenv("DB_PATH", "embeddings/chromadb")).expanduser().resolve() 
 TEXT_COLLECTION  = os.getenv("TEXT_COLLECTION", config.TEXT_COLLECTION)
 IMAGE_COLLECTION = os.getenv("IMAGE_COLLECTION", config.IMAGE_COLLECTION)
+VIDEO_COLLECTION  = os.getenv("VIDEO_COLLECTION",config.VIDEO_COLLECTION)
 TEXT_MODEL_NAME  = os.getenv("TEXT_MODEL_NAME", config.TEXT_MODEL_NAME)
 
 DB_PATH.mkdir(parents=True, exist_ok=True)
@@ -39,4 +40,12 @@ def get_image_collection(client=None):
         name=IMAGE_COLLECTION,
         embedding_function=_image_ef,
         metadata={"format":"image"}
+    )
+
+def get_video_collection(client=None):
+    client = client or get_client()
+    return client.get_or_create_collection(
+        name=VIDEO_COLLECTION,
+        embedding_function=_image_ef,
+        metadata={"format": "video"}
     )

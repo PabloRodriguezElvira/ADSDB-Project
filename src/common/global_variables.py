@@ -62,6 +62,7 @@ PEXELS_VIDEO_SEARCH_URL = "https://api.pexels.com/videos/search"
 CHROMADB_PATH = Path("embeddings/chromadb").expanduser().resolve() 
 TEXT_COLLECTION  = "texts_v1"
 IMAGE_COLLECTION = "images_v1"
+VIDEO_COLLECTION = "videos_v1"
 TEXT_MODEL_NAME  = "sentence-transformers/all-MiniLM-L6-v2"
 IMAGE_QUERY_PATH = "queries/images/"
 VIDEO_QUERY_PATH = "queries/videos/"
