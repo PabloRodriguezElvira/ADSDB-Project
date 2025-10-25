@@ -4,10 +4,12 @@ import chromadb
 from chromadb.config import Settings
 from chromadb.utils import embedding_functions as ef
 
+import src.common.global_variables as config
+
 DB_PATH = Path(os.getenv("DB_PATH", "embeddings/chromadb")).expanduser().resolve() 
-TEXT_COLLECTION  = os.getenv("TEXT_COLLECTION",  "texts_v1")
-IMAGE_COLLECTION = os.getenv("IMAGE_COLLECTION", "images_v1")
-TEXT_MODEL_NAME  = os.getenv("TEXT_MODEL_NAME", "sentence-transformers/all-MiniLM-L6-v2")
+TEXT_COLLECTION  = os.getenv("TEXT_COLLECTION", config.TEXT_COLLECTION)
+IMAGE_COLLECTION = os.getenv("IMAGE_COLLECTION", config.IMAGE_COLLECTION)
+TEXT_MODEL_NAME  = os.getenv("TEXT_MODEL_NAME", config.TEXT_MODEL_NAME)
 
 DB_PATH.mkdir(parents=True, exist_ok=True)
 

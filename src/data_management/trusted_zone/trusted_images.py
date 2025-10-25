@@ -184,7 +184,7 @@ def process_images(client):
             all_images[key] = data
             progress.update(1)
 
-   # Split images into valid and invalid sets, and identify duplicates in the valid set.
+    # Split images into valid and invalid sets, and identify duplicates in the valid set.
     validated = validate_images(all_images)
     valid_images = validated["valid"]
     invalid_images = validated["invalid"]

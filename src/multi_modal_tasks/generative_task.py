@@ -7,12 +7,17 @@ import io
 import google.generativeai as genai
 import warnings
 import src.common.global_variables as config  # 👈 para acceder a TRUSTED_BUCKET
-import src.common.global_variables as config  # 👈 para acceder a TRUSTED_BUCKET
 from chromadb.utils import embedding_functions as ef
-from src.common.chroma_client import get_client, get_text_collection, get_image_collection
 from minio.error import S3Error
 from src.common.minio_client import get_minio_client
 from diffusers import StableDiffusionPipeline
+from src.common.chroma_client import (
+    get_client,
+    get_image_collection,
+    get_text_collection,
+    _text_ef,
+    _image_ef,
+)
 
 # ============================================================
 # 🔹 Configuración general y silenciamiento de warnings
@@ -36,8 +41,7 @@ client = get_client()
 col_text = get_text_collection(client)
 col_img = get_image_collection(client)
 
-TEXT_MODEL_NAME = os.getenv("TEXT_MODEL_NAME", "sentence-transformers/all-MiniLM-L6-v2")
-text_ef = ef.SentenceTransformerEmbeddingFunction(model_name=TEXT_MODEL_NAME)
+text_ef = ef.SentenceTransformerEmbeddingFunction(model_name=config.TEXT_MODEL_NAME)
 image_ef = ef.OpenCLIPEmbeddingFunction()
 
 api_key = os.getenv("GOOGLE_API_KEY")
@@ -209,37 +213,54 @@ def generate_response_gemini(system_prompt, user_prompt, extra_images=None, mime
         print(f"❌ Error while generating with Gemini: {e}")
         return f"❌ Exception while generating response: {str(e)}"
 
-
+"""
 import time
 
-# Detectar si hay GPU disponible
 device = "cuda" if torch.cuda.is_available() else "cpu"
 print(f"🧠 Loading Stable Diffusion on {device.upper()}...")
 
 start_time = time.time()
 
-pipe = StableDiffusionPipeline.from_pretrained(
-    "stabilityai/stable-diffusion-2-1-base",  # versión más ligera
-    torch_dtype=torch.float16 if device == "cuda" else torch.float32,
-    safety_checker=None,
-    requires_safety_checker=False
-).to(device)
+try:
+    model_id = "runwayml/stable-diffusion-v1-5" if device == "cpu" else "stabilityai/stable-diffusion-2-1-base"
+    print(f"📦 Loading model from cache: {model_id}")
 
-pipe.enable_attention_slicing()
+    pipe = StableDiffusionPipeline.from_pretrained(
+        model_id,
+        torch_dtype=torch.float16 if device == "cuda" else torch.float32,
+        safety_checker=None,
+        requires_safety_checker=False,
+        low_cpu_mem_usage=True
+    )
 
-load_time = time.time() - start_time
-print(f"✅ Stable Diffusion loaded successfully on {device.upper()} (took {load_time:.2f} sec)\n")
+    print("🔁 Moving model to device...")
+    pipe = pipe.to(device)
+
+    print("⚙️  Enabling attention slicing to save memory...")
+    pipe.enable_attention_slicing()
+
+    load_time = time.time() - start_time
+    print(f"✅ Stable Diffusion loaded successfully on {device.upper()} (took {load_time:.2f} sec)\n")
+
+except Exception as e:
+    print(f"❌ Error loading Stable Diffusion: {e}")except Exception as e:
+    print(f"❌ Error loading Stable Diffusion: {e}")
+    print("⚠️ Tip: If the process exits unexpectedly, you may be running out of memory.")
 
 def generate_image_with_diffusion(prompt, filename="generated_dish.png"):
-    """
+    
     Genera una imagen usando Stable Diffusion localmente.
     Muestra el prompt y la ruta donde se guarda el archivo.
-    """
+    
     print("========================================")
     print("🧠 Prompt used to generate the image:")
     print(prompt[:500])
     print("========================================")
 
+     # ⚠️ Stable Diffusion solo admite prompts hasta ~77 tokens (~400 caracteres aprox)
+    if len(prompt) > 400:
+        print(f"⚠️ Prompt too long ({len(prompt)} chars). Truncating to 400.")
+        prompt = prompt[:400]
     # 🔹 Genera la imagen con el modelo
     image = pipe(prompt).images[0]
 
@@ -252,6 +273,7 @@ def generate_image_with_diffusion(prompt, filename="generated_dish.png"):
     print(f"📍 Saved at: {abs_path}")
 
     return abs_path
+"""
 # ============================================================
 # 🔹 4️⃣ Pipeline completo RAG
 # ============================================================
@@ -286,7 +308,7 @@ def rag_pipeline(user_query: str, image_path: str):
 
 if __name__ == "__main__":
     query = "Suggest dishes with pulled pork"
-    image_path = r"C:\Users\adals\OneDrive\Documentos\Master\ADSDB-Project\pulled_pork.png"
+    image_path = r"C:\Users\adals\OneDrive\Documentos\Master\ADSDB-Project\queries\images\pulled_pork.png"
 
     print("\n Executing RAG pipeline:\n")
 
@@ -298,6 +320,7 @@ if __name__ == "__main__":
     print("\n IMAGES FOUND:")
     for p in image_paths:
         print(f"- {p}")
-
+"""
     print("\n Generating illustrative image from RAG output...")
     generate_image_with_diffusion(answer, filename="dish_from_response.png")
+"""
