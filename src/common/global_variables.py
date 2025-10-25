@@ -18,7 +18,6 @@ TRUSTED_TEXT_PATH = "trusted/text_data/"
 
 REJECTED_IMAGE_PATH = "rejected/image_data/"
 REJECTED_VIDEO_PATH = "rejected/video_data/"
-REJECTED_TEXT_PATH = "rejected/text_data/"
 
 LANDING_TEMPORAL_PATH = "temporal_landing/"
 LANDING_IMAGE_PATH = "persistent_landing/image_data/"
@@ -48,8 +47,7 @@ TRUSTED_FOLDERS = [
 
 REJECTED_FOLDERS = [
     REJECTED_IMAGE_PATH,
-    REJECTED_VIDEO_PATH,
-    REJECTED_TEXT_PATH
+    REJECTED_VIDEO_PATH
 ]
 
 
