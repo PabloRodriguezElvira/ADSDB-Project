@@ -55,13 +55,16 @@ REJECTED_FOLDERS = [
 PEXELS_API_KEY = "4tnQhPc8qWhAYxhTjjywT0HIqG4XXELn9mniXCpMJR9xlTcNFx6veL2Y"
 PEXELS_VIDEO_SEARCH_URL = "https://api.pexels.com/videos/search"
 
+# ------------- Generative task -------------
+GOOGLE_API_KEY = "AIzaSyAF31gVa2uAqgQWkSVuUpNyqVU1fffmIQ4"
+GOOGLE_API_KEY_URL = "https://aistudio.google.com/app/api-keys"
+
 
 # ------------- Embeddings and multi-modal tasks -------------
 CHROMADB_PATH = Path("embeddings/chromadb").expanduser().resolve() 
 TEXT_COLLECTION  = "texts_v1"
 IMAGE_COLLECTION = "images_v1"
 VIDEO_COLLECTION = "videos_v1"
-TEXT_MODEL_NAME  = "sentence-transformers/all-MiniLM-L6-v2"
 IMAGE_QUERY_PATH = "queries/images/"
 VIDEO_QUERY_PATH = "queries/videos/"
 

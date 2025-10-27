@@ -1,5 +1,4 @@
 from __future__ import annotations
-
 from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 import cv2
@@ -21,7 +20,7 @@ from src.data_management.exploitation_zone.exploitation_videos import (
 import src.common.global_variables as config
 
 
-# Cache Chroma connections just like in generative_task.py
+# Cache Chroma connections
 client = get_client()
 col_text = get_text_collection(client)
 col_img = get_image_collection(client)
@@ -133,7 +132,7 @@ def _format_text_results_for_display(raw_results: Dict[str, List[Any]]) -> str:
     ids = _flatten_query_list(raw_results.get("ids"))
 
     if not documents:
-        return "No se encontraron documentos similares."
+        return "No similar documents."
 
     sections: List[str] = []
     total = max(len(documents), len(metadatas), len(distances), len(ids))
@@ -164,7 +163,7 @@ def _format_image_results_for_display(raw_results: Dict[str, List[Any]]) -> str:
     distances = _flatten_query_list(raw_results.get("distances"))
 
     if not ids and not metadatas:
-        return "No se encontraron imágenes similares."
+        return "No similar images."
 
     total = max(len(ids), len(metadatas), len(distances), 1)
     sections: List[str] = []
@@ -192,7 +191,7 @@ def _format_video_results_for_display(raw_results: Dict[str, List[Any]]) -> str:
     distances = _flatten_query_list(raw_results.get("distances"))
 
     if not ids and not metadatas:
-        return "No se encontraron vídeos similares."
+        return "No similar videos."
 
     sections: List[str] = []
     total = max(len(ids), len(metadatas), len(distances), 1)
@@ -296,7 +295,7 @@ def find_similar_videos(
 
 
 if __name__ == "__main__":
-    selected_modality = "video"  # Options: "text", "image", "video"
+    selected_modality = "text"  # Options: "text", "image", "video"
 
     if selected_modality == "text":
         text_query = "Slow Cooker Texas Pulled Pork"
