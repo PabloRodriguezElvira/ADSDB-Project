@@ -25,7 +25,7 @@ from src.multi_modal_tasks.same_modality_task import (
 import src.common.global_variables as config
 
 
-# Cache Chroma connections just like in generative_task.py
+# Cache Chroma connections
 client = get_client()
 col_text = get_text_collection(client)
 col_img = get_image_collection(client)

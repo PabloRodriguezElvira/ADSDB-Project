@@ -22,7 +22,7 @@ import src.common.global_variables as config
 
 # Cache Chroma connections
 client = get_client()
-col_text = get_text_collection(client)
+col_text = get_text_collection(client)  
 col_img = get_image_collection(client)
 col_video = get_video_collection(client)
 BASE_DIR = Path(__file__).resolve().parents[2]  # Project root
@@ -295,7 +295,7 @@ def find_similar_videos(
 
 
 if __name__ == "__main__":
-    selected_modality = "text"  # Options: "text", "image", "video"
+    selected_modality = "image"  # Options: "text", "image", "video"
 
     if selected_modality == "text":
         text_query = "Slow Cooker Texas Pulled Pork"
