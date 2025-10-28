@@ -61,19 +61,23 @@ def upload_file_to_bucket(
             progress=progress,
         )
 
-
-def upload_directory_images(client: Minio, bucket: str, folder: str, dataset_path: Path):
+def upload_directory_images(
+    client: Minio, 
+    bucket: str, 
+    folder: str, 
+    dataset_path: Path, 
+    max_images: int | None = None
+):
     """
     Traverse the dataset directory and upload all image files to the given bucket/folder.
     Generates unique object names based on image type, split (train/val/test), and image counter.
     """
-
+    
     upload_queue = []
     total_size = 0
 
-    # First pass: gather images and compute total size for aggregate progress
+    # First step: gather images and compute total size for aggregate progress
     for split_dir in dataset_path.iterdir():
-        # Traverse subdirectories (evaluation, training, validation)
         for img_file in split_dir.rglob("*"):
             if not img_file.is_file():
                 continue
@@ -84,12 +88,19 @@ def upload_directory_images(client: Minio, bucket: str, folder: str, dataset_pat
                 upload_queue.append((split_dir.name, img_file, img_type, file_size))
                 total_size += file_size
 
+                # 🔹 Si se alcanzó el límite, salimos del bucle
+                if max_images is not None and len(upload_queue) >= max_images:
+                    break
+        # 🔹 También rompemos el bucle exterior si llegamos al límite
+        if max_images is not None and len(upload_queue) >= max_images:
+            break
+
     if not upload_queue:
         return False
 
     with ProgressBar(
         total=total_size,
-        description="Uploading image dataset",
+        description=f"Uploading up to {max_images or 'all'} images",
     ) as progress:
         for idx, (split_name, img_file, img_type, _) in enumerate(upload_queue):
             img_name = f"{img_type}-{split_name}-{idx}{img_file.suffix}"
@@ -99,10 +110,12 @@ def upload_directory_images(client: Minio, bucket: str, folder: str, dataset_pat
     return True
 
 
+
 def main():
     """
     Download the Food11 dataset from Kaggle, then upload its images
     to the MinIO temporal landing bucket (landing-zone/temporal_landing).
+    There is a maximum number of images to upload.
     """
 
     client = get_minio_client()
@@ -111,9 +124,10 @@ def main():
     print(path)
     dataset_path = Path(path)
     
+    MAX_IMAGES = 2000
 
     # Upload images to temporal_landing bucket
-    uploaded = upload_directory_images(client, config.LANDING_BUCKET, config.LANDING_TEMPORAL_PATH, dataset_path)
+    uploaded = upload_directory_images(client, config.LANDING_BUCKET, config.LANDING_TEMPORAL_PATH, dataset_path, MAX_IMAGES)
 
     if not uploaded:
         print("[WARN] No se encontraron imágenes para subir al bucket temporal.")

@@ -97,39 +97,40 @@ def find_similar_cross_modality(
 if __name__ == "__main__":
     "Main entry point: select which cross-modality search to run"
     relation = "image-text" # Options: "text-image", "text-video", "image-text", "image-video", "video-text", "video-image"
+    number_of_results = 3
 
     if relation == "text-image":
         text_query = "Shredded pork cooked slowly in Texas style."
-        results = find_similar_cross_modality(text_query, relation=relation, k=10)
+        results = find_similar_cross_modality(text_query, relation=relation, k=number_of_results)
         print(_format_image_results_for_display(results))
 
     elif relation == "text-video":
         text_query = "Slow Cooker Texas Pulled Pork"
-        results = find_similar_cross_modality(text_query, relation=relation, k=1)
+        results = find_similar_cross_modality(text_query, relation=relation, k=number_of_results)
         print(_format_video_results_for_display(results))
 
     elif relation == "image-text":
         image = "pulled_pork.png"
         image_path = (BASE_DIR / f"{config.IMAGE_QUERY_PATH}{image}").resolve()
-        results = find_similar_cross_modality(image_path, relation=relation, k=3)
+        results = find_similar_cross_modality(image_path, relation=relation, k=number_of_results)
         print(_format_text_results_for_display(results))
 
     elif relation == "image-video":
         image = "bread.jpg"
         image_path = (BASE_DIR / f"{config.IMAGE_QUERY_PATH}{image}").resolve()
-        results = find_similar_cross_modality(image_path, relation=relation, k=1)
+        results = find_similar_cross_modality(image_path, relation=relation, k=number_of_results)
         print(_format_video_results_for_display(results))
 
     elif relation == "video-text":
         video = "leche.mp4"
         video_path = (BASE_DIR / f"{config.VIDEO_QUERY_PATH}{video}").resolve()
-        results = find_similar_cross_modality(video_path, relation=relation, k=3)
+        results = find_similar_cross_modality(video_path, relation=relation, k=number_of_results)
         print(_format_text_results_for_display(results))
 
     elif relation == "video-image":
         video = "leche.mp4"
         video_path = (BASE_DIR / f"{config.VIDEO_QUERY_PATH}{video}").resolve()
-        results = find_similar_cross_modality(video_path, relation=relation, k=10)
+        results = find_similar_cross_modality(video_path, relation=relation, k=number_of_results)
         print(_format_image_results_for_display(results))
 
     else:

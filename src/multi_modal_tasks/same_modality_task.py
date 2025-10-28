@@ -10,8 +10,7 @@ from src.common.chroma_client import (
     get_text_collection,
     get_image_collection,
     get_video_collection,
-    _text_ef,
-    _image_ef,
+    _text_image_ef
 )
 from src.data_management.exploitation_zone.exploitation_videos import (
     extract_frames_from_file,
@@ -35,7 +34,7 @@ def _encode_text_input(text: str) -> List[float]:
     if not clean:
         raise ValueError("Text query must be a non-empty string.")
 
-    embeddings = _text_ef([clean])
+    embeddings = _text_image_ef([clean])
     if not embeddings:
         raise ValueError("Unable to compute embedding for the provided text.")
     return embeddings[0]
@@ -47,7 +46,7 @@ def _encode_image_array(image_array: np.ndarray) -> List[float]:
         raise ValueError("Image array must be an RGB image with shape (H, W, 3).")
 
     rgb_uint8 = np.asarray(image_array, dtype=np.uint8)
-    embeddings = _image_ef([rgb_uint8])
+    embeddings = _text_image_ef([rgb_uint8])
     if not embeddings:
         raise ValueError("Unable to compute embedding for the provided image.")
     return embeddings[0]
@@ -296,22 +295,23 @@ def find_similar_videos(
 
 if __name__ == "__main__":
     selected_modality = "image"  # Options: "text", "image", "video"
+    number_of_results = 3
 
     if selected_modality == "text":
         text_query = "Slow Cooker Texas Pulled Pork"
-        results = find_similar_texts(text_query, k_text=3)
+        results = find_similar_texts(text_query, k_text=number_of_results)
         results = _format_text_results_for_display(results)
     elif selected_modality == "image":
         image = "bread.jpg"
         image_path = (BASE_DIR / f"{config.IMAGE_QUERY_PATH}{image}").resolve()
-        image_results = find_similar_images(image_path, k_image=10)
+        image_results = find_similar_images(image_path, k_image=number_of_results)
         results = _format_image_results_for_display(image_results)
     elif selected_modality == "video":
         video = "leche.mp4"
         video_path = (BASE_DIR / f"{config.VIDEO_QUERY_PATH}{video}").resolve()
         video_results = find_similar_videos(
             video_path,
-            k_video=1,
+            k_video=number_of_results,
             frame_interval_s=1.0,
             max_frames=50,
         )

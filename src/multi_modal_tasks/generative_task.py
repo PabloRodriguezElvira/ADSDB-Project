@@ -13,8 +13,7 @@ from src.common.chroma_client import (
     get_client,
     get_image_collection,
     get_text_collection,
-    _text_ef,
-    _image_ef,
+    _text_image_ef,
     GENERATIVE_MODEL
 )
 
@@ -52,7 +51,7 @@ def _encode_text_input(text: str) -> List[float]:
     if not clean:
         raise ValueError("Text query must be a non-empty string.")
 
-    embeddings = _text_ef([clean])
+    embeddings = _text_image_ef([clean])
     if not embeddings:
         raise ValueError("Unable to compute embedding for the provided text.")
     return embeddings[0]
@@ -61,7 +60,7 @@ def get_image_embedding(image_path: str):
     """Function to get the embedding from the input image, not equivalent to the previous tasks"""
     img = Image.open(image_path).convert("RGB")
     arr = np.asarray(img, dtype=np.uint8)
-    emb_list = _image_ef([arr])
+    emb_list = _text_image_ef([arr])
     return emb_list[0]
 
 def retrieve_from_chroma(col_text, col_img, text_emb, image_emb, k_text=2, k_img=2):
