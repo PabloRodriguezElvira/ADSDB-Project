@@ -1,5 +1,5 @@
 from typing import Optional
-from tqdm import tqdm
+from tqdm.auto import tqdm
 
 
 class ProgressBar:

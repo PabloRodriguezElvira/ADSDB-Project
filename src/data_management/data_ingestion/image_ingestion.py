@@ -124,7 +124,7 @@ def main():
     print(path)
     dataset_path = Path(path)
     
-    MAX_IMAGES = 2000
+    MAX_IMAGES = 20000
 
     # Upload images to temporal_landing bucket
     uploaded = upload_directory_images(client, config.LANDING_BUCKET, config.LANDING_TEMPORAL_PATH, dataset_path, MAX_IMAGES)

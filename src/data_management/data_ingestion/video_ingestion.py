@@ -124,7 +124,7 @@ def main():
     """
     
     query = "healthy food cooking"
-    videos_amount = 3
+    videos_amount = 1000
 
     client = get_minio_client()
 

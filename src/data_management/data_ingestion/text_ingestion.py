@@ -11,7 +11,6 @@ import src.common.global_variables as config
 # Initialize the MinIO client using a helper function
 client = get_minio_client()
 
-
 def get_json_file_from_folder(folder_path: str, json_file: str):
     """
     Locate a specific JSON file inside a given folder.
