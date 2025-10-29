@@ -9,6 +9,9 @@ from datetime import datetime
 from typing import Iterable, List
 from zoneinfo import ZoneInfo
 from minio.error import S3Error
+import re, json, subprocess, imageio_ffmpeg as iio
+
+
 
 from src.common.minio_client import get_minio_client
 import src.common.global_variables as config
@@ -31,105 +34,132 @@ def dst_key_for(src_key: str, dst_prefix: str):
 
 """Functions to validate video integrity and quality by checking duration, width, height, codec:"""
 
-def is_video_valid(file_path: str):
-    """Check if ffprobe can read the video."""
-    try:
-        
-        ffprobe_path = shutil.which("ffprobe")
-        if not ffprobe_path:
-            raise FileNotFoundError(
-                "ffprobe not found. Install ffmpeg and make sure it's in your PATH."
-            )
 
-        subprocess.run(
-            [
-                ffprobe_path, "-v", "error",
-                "-show_entries", "format=format_name",
-                "-of", "default=noprint_wrappers=1:nokey=1",
-                file_path
-            ],
-            stderr=subprocess.PIPE,  # capture errors if the video is corrupted
-            text=True,               # decode output as text
-            check=True               # if ffprobe fails, raise CalledProcessError
-        )
-        return True                  # ffprobe could read it, so it's valid
+# def video_properties(file_path: str):
+#     """Extract duration, resolution, and codec info from a video using ffprobe."""
+#     result = {
+#         "duration": None,
+#         "width": None,
+#         "height": None,
+#         "codec": None,
+#         "duration_ok": False,
+#         "resolution_ok": False,
+#         "codec_ok": False,
+#         "error": None
+#     }
 
-    except subprocess.CalledProcessError:
-        return False                 # ffprobe failed (file not readable or corrupted)
+#     try:
+#         # locate ffprobe
+#         ffprobe_path = shutil.which("ffprobe") or shutil.which("ffprobe.exe")
 
-    except FileNotFoundError as e:
-        print(f"[ERROR] {e}")        # ffprobe not installed or not in PATH
-        return False
+#         # If it doesn't exists, use imageio-ffmpeg binary
+#         if not ffprobe_path:
+#             ffmpeg_path = Path(iio.get_ffmpeg_exe())
+#             print("ffmpeg path:", ffmpeg_path)
+#             possible_ffprobe = ffmpeg_path.with_name("ffprobe.exe" if os.name == "nt" else "ffprobe")
 
+#             if possible_ffprobe.exists():
+#                 ffprobe_path = str(possible_ffprobe)
+#             else:
+#                 raise FileNotFoundError(
+#                     "ffprobe not found. Install ffmpeg or ensure imageio-ffmpeg provides it."
+#                 )
+            
+#         if not ffprobe_path:
+#             raise FileNotFoundError(
+#                 "ffprobe not found. Install ffmpeg and make sure it's in your PATH."
+#             )
 
-def video_properties(file_path: str):
-    """Extract duration, resolution, and codec info from a video using ffprobe."""
-    result = {
-        "duration": None,
-        "width": None,
-        "height": None,
-        "codec": None,
-        "duration_ok": False,
-        "resolution_ok": False,
-        "codec_ok": False,
-        "error": None
-    }
-
-    try:
-        ffprobe_path = shutil.which("ffprobe") # Locate ffprobe.
-        if not ffprobe_path:
-            raise FileNotFoundError(
-                "ffprobe not found. Install ffmpeg and make sure it's in your PATH."
-            )
-
-        cmd = [                                # Command to extract the properties.
-            ffprobe_path, "-v", "error",
-            "-select_streams", "v:0",
-            "-show_entries", "format=duration:stream=width,height,codec_name",
-            "-of", "json",# output format as JSON.
-            file_path
-        ]                                       
+#         cmd = [                                # Command to extract the properties.
+#             ffprobe_path, "-v", "error",
+#             "-select_streams", "v:0",
+#             "-show_entries", "format=duration:stream=width,height,codec_name",
+#             "-of", "json",# output format as JSON.
+#             file_path
+#         ]                                       
 
         
-        process = subprocess.run(              # Run ffprobe and capture JSON output.
-            cmd,    
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            check=True
-        )
+#         process = subprocess.run(              # Run ffprobe and capture JSON output.
+#             cmd,    
+#             stdout=subprocess.PIPE,
+#             stderr=subprocess.PIPE,
+#             text=True,
+#             check=True
+#         )
 
-        info = json.loads(process.stdout or "{}")
+#         info = json.loads(process.stdout or "{}")
 
       
-        duration = float(info.get("format", {}).get("duration", 0.0)) # Extract duration.
+#         duration = float(info.get("format", {}).get("duration", 0.0)) # Extract duration.
 
-        # Extract video stream info. 
-        width, height, codec = 0, 0, ""
-        if "streams" in info and len(info["streams"]) > 0:
-            first_stream = info["streams"][0]
-            width = first_stream.get("width", 0)
-            height = first_stream.get("height", 0)
-            codec = first_stream.get("codec_name", "").lower()
+#         # Extract video stream info. 
+#         width, height, codec = 0, 0, ""
+#         if "streams" in info and len(info["streams"]) > 0:
+#             first_stream = info["streams"][0]
+#             width = first_stream.get("width", 0)
+#             height = first_stream.get("height", 0)
+#             codec = first_stream.get("codec_name", "").lower()
 
-        # Update the results.
-        result.update({
-            "duration": duration,
-            "width": width,
-            "height": height,
-            "codec": codec,
-            "duration_ok": duration > 1.0,                      # video must last > 1s.
-            "resolution_ok": width >= 480 and height >= 360,    # at least 480p.
-            "codec_ok": codec in ("h264", "hevc", "vp9")        # accepted codecs.
-        })
+#         # Update the results.
+#         result.update({
+#             "duration": duration,
+#             "width": width,
+#             "height": height,
+#             "codec": codec,
+#             "duration_ok": duration > 1.0,                      # video must last > 1s.
+#             "resolution_ok": width >= 480 and height >= 360,    # at least 480p.
+#             "codec_ok": codec in ("h264", "hevc", "vp9")        # accepted codecs.
+#         })
 
-    except subprocess.CalledProcessError as e:
-        result["error"] = f"ffprobe failed: {e}"
-    except json.JSONDecodeError:
-        result["error"] = "Invalid ffprobe JSON output"
+#     except subprocess.CalledProcessError as e:
+#         result["error"] = f"ffprobe failed: {e}"
+#     except json.JSONDecodeError:
+#         result["error"] = "Invalid ffprobe JSON output"
+#     except Exception as e:
+#         result["error"] = str(e)
+#     return result
+
+
+
+def video_properties(path: str):
+    DUR_RE = re.compile(r"Duration:\s*(\d+):(\d+):(\d+\.\d+)")
+    STREAM_RE = re.compile(r"Stream #\d+:\d+.*Video:\s*([^,]+).*?(\d+)x(\d+)")
+
+    res = {"duration": None, "width": None, "height": None, "codec": None,
+           "duration_ok": False, "resolution_ok": False, "codec_ok": False, "error": None}
+    try:
+        ffmpeg = iio.get_ffmpeg_exe()  # ffmpeg from imageio-ffmpeg
+        
+        p = subprocess.run(
+            [ffmpeg, "-hide_banner", "-i", path],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            text=True, encoding="utf-8", errors="replace", check=False
+        )
+        out = p.stderr  # ffmpeg prints metadata in stderr
+
+        # Duration
+        m = DUR_RE.search(out)
+        if m:
+            h, mi, s = int(m.group(1)), int(m.group(2)), float(m.group(3))
+            duration = h*3600 + mi*60 + s
+            res["duration"] = duration
+            res["duration_ok"] = duration > 1.0
+
+        # Stream (codec, width, height)
+        m = STREAM_RE.search(out)
+        if m:
+            codec = m.group(1).lower().strip()
+            codec_clean = codec.lower().split()[0]       
+            codec_clean = codec_clean.replace("(", "").replace(")", "")
+            w, h = int(m.group(2)), int(m.group(3))
+
+            res.update({"codec": codec, "width": w, "height": h})
+            res["resolution_ok"] = (w >= 480 and h >= 360)
+            res["codec_ok"] = codec_clean in ("h264", "hevc", "vp9")
+
     except Exception as e:
-        result["error"] = str(e)
-    return result
+        res["error"] = str(e)
+    return res
 
 def duplicates(videos: dict):
     """Identify duplicate videos by comparing their MD5 hashes."""
@@ -190,6 +220,7 @@ def process_videos(client):
                 temp_path = tmp.name
 
             props = video_properties(temp_path)
+            print(props)
             os.remove(temp_path)
 
             if props["duration_ok"] and props["resolution_ok"] and props["codec_ok"]:
