@@ -32,96 +32,10 @@ def dst_key_for(src_key: str, dst_prefix: str):
         dst_key = os.path.join(dst_prefix, os.path.basename(src_key))
     return dst_key
 
-"""Functions to validate video integrity and quality by checking duration, width, height, codec:"""
-
-
-# def video_properties(file_path: str):
-#     """Extract duration, resolution, and codec info from a video using ffprobe."""
-#     result = {
-#         "duration": None,
-#         "width": None,
-#         "height": None,
-#         "codec": None,
-#         "duration_ok": False,
-#         "resolution_ok": False,
-#         "codec_ok": False,
-#         "error": None
-#     }
-
-#     try:
-#         # locate ffprobe
-#         ffprobe_path = shutil.which("ffprobe") or shutil.which("ffprobe.exe")
-
-#         # If it doesn't exists, use imageio-ffmpeg binary
-#         if not ffprobe_path:
-#             ffmpeg_path = Path(iio.get_ffmpeg_exe())
-#             print("ffmpeg path:", ffmpeg_path)
-#             possible_ffprobe = ffmpeg_path.with_name("ffprobe.exe" if os.name == "nt" else "ffprobe")
-
-#             if possible_ffprobe.exists():
-#                 ffprobe_path = str(possible_ffprobe)
-#             else:
-#                 raise FileNotFoundError(
-#                     "ffprobe not found. Install ffmpeg or ensure imageio-ffmpeg provides it."
-#                 )
-            
-#         if not ffprobe_path:
-#             raise FileNotFoundError(
-#                 "ffprobe not found. Install ffmpeg and make sure it's in your PATH."
-#             )
-
-#         cmd = [                                # Command to extract the properties.
-#             ffprobe_path, "-v", "error",
-#             "-select_streams", "v:0",
-#             "-show_entries", "format=duration:stream=width,height,codec_name",
-#             "-of", "json",# output format as JSON.
-#             file_path
-#         ]                                       
-
-        
-#         process = subprocess.run(              # Run ffprobe and capture JSON output.
-#             cmd,    
-#             stdout=subprocess.PIPE,
-#             stderr=subprocess.PIPE,
-#             text=True,
-#             check=True
-#         )
-
-#         info = json.loads(process.stdout or "{}")
-
-      
-#         duration = float(info.get("format", {}).get("duration", 0.0)) # Extract duration.
-
-#         # Extract video stream info. 
-#         width, height, codec = 0, 0, ""
-#         if "streams" in info and len(info["streams"]) > 0:
-#             first_stream = info["streams"][0]
-#             width = first_stream.get("width", 0)
-#             height = first_stream.get("height", 0)
-#             codec = first_stream.get("codec_name", "").lower()
-
-#         # Update the results.
-#         result.update({
-#             "duration": duration,
-#             "width": width,
-#             "height": height,
-#             "codec": codec,
-#             "duration_ok": duration > 1.0,                      # video must last > 1s.
-#             "resolution_ok": width >= 480 and height >= 360,    # at least 480p.
-#             "codec_ok": codec in ("h264", "hevc", "vp9")        # accepted codecs.
-#         })
-
-#     except subprocess.CalledProcessError as e:
-#         result["error"] = f"ffprobe failed: {e}"
-#     except json.JSONDecodeError:
-#         result["error"] = "Invalid ffprobe JSON output"
-#     except Exception as e:
-#         result["error"] = str(e)
-#     return result
-
-
 
 def video_properties(path: str):
+    """Extract duration, resolution, and codec info from a video using ffprobe and validates them."""
+
     DUR_RE = re.compile(r"Duration:\s*(\d+):(\d+):(\d+\.\d+)")
     STREAM_RE = re.compile(r"Stream #\d+:\d+.*Video:\s*([^,]+).*?(\d+)x(\d+)")
 
@@ -130,6 +44,7 @@ def video_properties(path: str):
     try:
         ffmpeg = iio.get_ffmpeg_exe()  # ffmpeg from imageio-ffmpeg
         
+        # Call ffmpeg to get the properties.
         p = subprocess.run(
             [ffmpeg, "-hide_banner", "-i", path],
             stdout=subprocess.PIPE, stderr=subprocess.PIPE,
@@ -137,7 +52,7 @@ def video_properties(path: str):
         )
         out = p.stderr  # ffmpeg prints metadata in stderr
 
-        # Duration
+        # Extract video duration from the ffmpeg result
         m = DUR_RE.search(out)
         if m:
             h, mi, s = int(m.group(1)), int(m.group(2)), float(m.group(3))
@@ -145,7 +60,7 @@ def video_properties(path: str):
             res["duration"] = duration
             res["duration_ok"] = duration > 1.0
 
-        # Stream (codec, width, height)
+        # Extract video codec, width and height from the ffmpeg result
         m = STREAM_RE.search(out)
         if m:
             codec = m.group(1).lower().strip()
