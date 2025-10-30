@@ -294,11 +294,11 @@ def find_similar_videos(
 
 
 if __name__ == "__main__":
-    selected_modality = "image"  # Options: "text", "image", "video"
+    selected_modality = "video"  # Options: "text", "image", "video"
     number_of_results = 3
 
     if selected_modality == "text":
-        text_query = "Slow Cooker Texas Pulled Pork"
+        text_query = "Chicken with garlic and tomatoes"
         results = find_similar_texts(text_query, k_text=number_of_results)
         results = _format_text_results_for_display(results)
     elif selected_modality == "image":

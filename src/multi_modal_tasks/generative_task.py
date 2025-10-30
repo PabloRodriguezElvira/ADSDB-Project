@@ -23,7 +23,6 @@ os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
 # Minio connection
 client_s3 = get_minio_client()
-print("MINIO")
 
 # Cache Chroma connections
 client = get_client()
@@ -237,8 +236,8 @@ def rag_pipeline(user_query: str, image_path: str):
 
 if __name__ == "__main__":
     """Main entry point: entering as input the query user and the image"""
-    query = "Suggest dishes with pulled pork"
-    image = "pulled_pork.png"
+    query = "Suggest dishes with avocado"
+    image = "avocado.jpg"
     image_path = (BASE_DIR / f"{config.IMAGE_QUERY_PATH}{image}").resolve()
     print("\n Executing RAG pipeline:\n")
 
