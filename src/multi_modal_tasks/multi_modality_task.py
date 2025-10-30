@@ -96,7 +96,7 @@ def find_similar_cross_modality(
 
 if __name__ == "__main__":
     "Main entry point: select which cross-modality search to run"
-    relation = "video-image" # Options: "text-image", "text-video", "image-text", "image-video", "video-text", "video-image"
+    relation = "text-image" # Options: "text-image", "text-video", "image-text", "image-video", "video-text", "video-image"
     number_of_results = 3
 
     if relation == "text-image":

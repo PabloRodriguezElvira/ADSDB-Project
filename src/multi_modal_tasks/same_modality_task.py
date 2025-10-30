@@ -294,7 +294,7 @@ def find_similar_videos(
 
 
 if __name__ == "__main__":
-    selected_modality = "video"  # Options: "text", "image", "video"
+    selected_modality = "text"  # Options: "text", "image", "video"
     number_of_results = 3
 
     if selected_modality == "text":
