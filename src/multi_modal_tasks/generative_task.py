@@ -44,7 +44,7 @@ warnings.filterwarnings(
     module="huggingface_hub",
 )
 
-def _encode_text_input(text: str) -> List[float]:
+def _encode_text_input(text: str):
     """Return the embedding vector for the provided text using the ChromaDB function."""
     clean = text.strip()
     if not clean:

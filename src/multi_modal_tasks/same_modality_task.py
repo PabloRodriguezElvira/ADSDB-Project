@@ -28,7 +28,7 @@ BASE_DIR = Path(__file__).resolve().parents[2]  # Project root
 
 
 
-def _encode_text_input(text: str) -> List[float]:
+def _encode_text_input(text: str):
     """Return the embedding vector for the provided text using the ChromaDB function."""
     clean = text.strip()
     if not clean:
@@ -40,7 +40,7 @@ def _encode_text_input(text: str) -> List[float]:
     return embeddings[0]
 
 
-def _encode_image_array(image_array: np.ndarray) -> List[float]:
+def _encode_image_array(image_array: np.ndarray):
     """Return the embedding vector for the provided RGB image array using the ChromaDB function"""
     if image_array.ndim != 3 or image_array.shape[2] != 3:
         raise ValueError("Image array must be an RGB image with shape (H, W, 3).")
@@ -52,7 +52,7 @@ def _encode_image_array(image_array: np.ndarray) -> List[float]:
     return embeddings[0]
 
 
-def _encode_image_input(image: Union[str, Path, np.ndarray, Image.Image]) -> Tuple[List[float], np.ndarray]:
+def _encode_image_input(image: Union[str, Path, np.ndarray, Image.Image]):
     """Load and encode an image, returning the embedding and the RGB array."""
     if isinstance(image, (str, Path)):
         array = _load_image(Path(image))
@@ -67,7 +67,7 @@ def _encode_image_input(image: Union[str, Path, np.ndarray, Image.Image]) -> Tup
     return embedding, array
 
 
-def _load_image(image_path: Path) -> np.ndarray:
+def _load_image(image_path: Path):
     """Load an image from disk into an RGB NumPy array."""
     if not image_path.is_file():
         raise FileNotFoundError(f"Image not found: {image_path}")
@@ -84,7 +84,7 @@ def _extract_frames(
     *,
     frame_interval_s: float = 1.0,
     max_frames: int = 24,
-) -> List[Tuple[int, float, np.ndarray]]:
+):
     """
     Sample frames from a video every `frame_interval_s` seconds.
 
@@ -112,7 +112,7 @@ def _extract_frames(
     return frames
 
 
-def _flatten_query_list(items: Optional[List[Any]]) -> List[Any]:
+def _flatten_query_list(items: Optional[List[Any]]):
     """Return the first nested list (if any) or a flat list to ease formatting."""
     if not items:
         return []
@@ -123,7 +123,7 @@ def _flatten_query_list(items: Optional[List[Any]]) -> List[Any]:
     return [items]
 
 
-def _format_text_results_for_display(raw_results: Dict[str, List[Any]]) -> str:
+def _format_text_results_for_display(raw_results: Dict[str, List[Any]]):
     """Build a readable string highlighting each of the returned text documents."""
     documents = _flatten_query_list(raw_results.get("documents"))
     metadatas = _flatten_query_list(raw_results.get("metadatas"))
@@ -155,7 +155,7 @@ def _format_text_results_for_display(raw_results: Dict[str, List[Any]]) -> str:
     return "\n\n".join(sections)
 
 
-def _format_image_results_for_display(raw_results: Dict[str, List[Any]]) -> str:
+def _format_image_results_for_display(raw_results: Dict[str, List[Any]]):
     """Format image retrieval output to highlight each match."""
     ids = _flatten_query_list(raw_results.get("ids"))
     metadatas = _flatten_query_list(raw_results.get("metadatas"))
@@ -183,7 +183,7 @@ def _format_image_results_for_display(raw_results: Dict[str, List[Any]]) -> str:
     return "\n\n".join(sections)
 
 
-def _format_video_results_for_display(raw_results: Dict[str, List[Any]]) -> str:
+def _format_video_results_for_display(raw_results: Dict[str, List[Any]]):
     """Format video retrieval output (one embedding per video) for display."""
     ids = _flatten_query_list(raw_results.get("ids"))
     metadatas = _flatten_query_list(raw_results.get("metadatas"))
@@ -262,7 +262,7 @@ def find_similar_same_modality(
     raise ValueError(f"Unsupported modality '{modality}'. Expected 'text', 'image', or 'video'.")
 
 
-def find_similar_texts(query: str, *, k_text: int = 5) -> Dict[str, List[Any]]:
+def find_similar_texts(query: str, *, k_text: int = 5):
     """Wraps the function `find_similar_same_modality` for text queries."""
     return find_similar_same_modality(query, modality="text", k=k_text)
 

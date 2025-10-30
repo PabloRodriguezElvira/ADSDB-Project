@@ -1,7 +1,7 @@
 import os
 import io
 import argparse
-from typing import Iterable, List, Optional
+from typing import List, Optional
 from PIL import Image, ImageOps
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -12,14 +12,14 @@ import src.common.global_variables as config
 from src.common.progress_bar import ProgressBar
 
 
-def list_objects(client, bucket, prefix) -> Iterable[str]:
+def list_objects(client, bucket, prefix):
     """List all objects from a given MinIO bucket and prefix."""
     for obj in client.list_objects(bucket, prefix=prefix, recursive=True):
         if not obj.object_name.endswith("/"):
             yield obj.object_name
 
 
-def convert_to_png(data: bytes, size=(512, 512)) -> bytes:
+def convert_to_png(data: bytes, size=(512, 512)):
     """Convert an image to a resized PNG with RGBA mode."""
     # Load image from bytes
     img = Image.open(io.BytesIO(data))
@@ -42,7 +42,7 @@ def convert_to_png(data: bytes, size=(512, 512)) -> bytes:
     return buf.read()
 
 
-def dst_key_for(src_key: str) -> str:
+def dst_key_for(src_key: str):
     """Generate the destination key (path) for the formatted PNG image."""
     if src_key.startswith(config.LANDING_IMAGE_PATH):
         dst_key = src_key.replace(config.LANDING_IMAGE_PATH, config.FORMATTED_IMAGE_PATH, 1)

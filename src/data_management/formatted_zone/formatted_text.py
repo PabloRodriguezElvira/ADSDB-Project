@@ -2,7 +2,7 @@ import os
 import io
 import json
 import re
-from typing import Iterable, List, Optional
+from typing import List, Optional
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from minio.error import S3Error
@@ -14,14 +14,14 @@ from src.common.progress_bar import ProgressBar
 
 FIELDS_TO_KEEP = ["title", "ingredients", "directions"]
 
-def list_objects(client, bucket, prefix) -> Iterable[str]:
+def list_objects(client, bucket, prefix):
     """List all object names in a given S3 bucket and prefix, skipping folders."""
     for obj in client.list_objects(bucket, prefix=prefix, recursive=True):
         if not obj.object_name.endswith("/"):
             yield obj.object_name
 
 
-def dst_key_for(src_key: str) -> str:
+def dst_key_for(src_key: str):
     """Generate the destination key (path) for the processed JSON file."""
     if src_key.startswith(config.LANDING_TEXT_PATH):
         dst_key = src_key.replace(config.LANDING_TEXT_PATH, config.FORMATTED_TEXT_PATH, 1)
@@ -31,7 +31,7 @@ def dst_key_for(src_key: str) -> str:
     return base + ".json"
 
 
-def _has_content(value) -> bool:
+def _has_content(value):
     """Check if a value is not empty."""
     if value is None:
         return False
@@ -51,7 +51,7 @@ def _normalize_root(data):
     raise ValueError("Unsupported JSON structure: expected list or dict with 'root'.")
 
 
-def _to_space_text(value) -> str:
+def _to_space_text(value):
     """Convert any value to a clean single-line string."""
     if value is None:
         s = ""

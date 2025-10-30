@@ -1,7 +1,5 @@
 from __future__ import annotations
-
 from dataclasses import dataclass
-from typing import Iterable
 
 from minio import Minio
 from minio.commonconfig import CopySource

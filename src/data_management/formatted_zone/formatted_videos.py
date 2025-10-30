@@ -3,7 +3,7 @@ import tempfile
 import subprocess
 from pathlib import Path
 from datetime import datetime
-from typing import Iterable, List, Optional
+from typing import List, Optional
 from zoneinfo import ZoneInfo
 import imageio_ffmpeg as ff
 from minio.error import S3Error
@@ -13,7 +13,7 @@ import src.common.global_variables as config
 from src.common.progress_bar import ProgressBar
 
 
-def list_objects(client, bucket, prefix) -> Iterable[str]:
+def list_objects(client, bucket, prefix):
     """List all files (excluding folders) from a MinIO bucket and prefix."""
     for obj in client.list_objects(bucket, prefix=prefix, recursive=True):
         if not obj.object_name.endswith("/"):
@@ -35,7 +35,7 @@ def transcode_to_mp4(in_path, out_path):
     subprocess.run(cmd, check=True)
 
 
-def dst_key_for(src_key: str) -> str:
+def dst_key_for(src_key: str):
     """Generate the destination key (path) for the converted MP4 video."""
     if src_key.startswith(config.LANDING_VIDEO_PATH):
         dst_key = src_key.replace(config.LANDING_VIDEO_PATH, config.FORMATTED_VIDEO_PATH, 1)

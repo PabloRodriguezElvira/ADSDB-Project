@@ -3,7 +3,7 @@ import io
 import json
 import re
 from datetime import datetime
-from typing import Iterable, List, Optional
+from typing import List, Optional
 from zoneinfo import ZoneInfo
 from minio.error import S3Error
 
@@ -12,7 +12,7 @@ import src.common.global_variables as config
 from src.common.progress_bar import ProgressBar
 
 
-def list_objects(client, bucket, prefix) -> Iterable[str]:
+def list_objects(client, bucket, prefix):
     """List all objects from a given MinIO bucket and prefix."""
     for obj in client.list_objects(bucket, prefix=prefix, recursive=True):
         if not obj.object_name.endswith("/"):

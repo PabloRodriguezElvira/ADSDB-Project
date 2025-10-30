@@ -1,5 +1,4 @@
 from pathlib import Path
-from zipfile import ZipFile
 from minio import Minio
 from minio.error import S3Error
 from datetime import datetime
@@ -32,10 +31,10 @@ def upload_file_to_bucket(
         "x-amz-meta-ingested-at": datetime.now(ZoneInfo("Europe/Madrid")).isoformat(),
     }
 
-    # Determine MIME type. This is a standard that indicates the type of content of a file.
+    # Determine MIME type. This is a standard that indicates the content type of a file.
     content_type, _ = mimetypes.guess_type(local_file.name)
 
-    # Create the progress bar only if it has not been created before. It shows the uploading progress of all images. 
+    # Create the progress bar only if it has not been created before. It shows the upload progress of all images.
     if progress is None:
         file_size = local_file.stat().st_size
 
@@ -88,10 +87,10 @@ def upload_directory_images(
                 upload_queue.append((split_dir.name, img_file, img_type, file_size))
                 total_size += file_size
 
-                # 🔹 Si se alcanzó el límite, salimos del bucle
+                # If the limit is reached, exit the loop
                 if max_images is not None and len(upload_queue) >= max_images:
                     break
-        # 🔹 También rompemos el bucle exterior si llegamos al límite
+        # Also break the outer loop if the limit is reached
         if max_images is not None and len(upload_queue) >= max_images:
             break
 
@@ -124,21 +123,21 @@ def main():
     print(path)
     dataset_path = Path(path)
     
-    MAX_IMAGES = 20000
+    MAX_IMAGES = 1500
 
     # Upload images to temporal_landing bucket
     uploaded = upload_directory_images(client, config.LANDING_BUCKET, config.LANDING_TEMPORAL_PATH, dataset_path, MAX_IMAGES)
 
     if not uploaded:
-        print("[WARN] No se encontraron imágenes para subir al bucket temporal.")
+        print("[WARN] No images were found to upload to the temporal bucket.")
 
 
 if __name__ == "__main__":
     """
-    Entry poiny: runs main and handles MinIO errors
+    Entry point: runs main and handles MinIO errors
     """
 
     try:
         main()
     except S3Error as e:
-        print(f"Error MinIO: {e}")
+        print(f"MinIO Error: {e}")

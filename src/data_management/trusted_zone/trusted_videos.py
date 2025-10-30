@@ -6,7 +6,7 @@ import hashlib
 import shutil
 from pathlib import Path
 from datetime import datetime
-from typing import Iterable, List
+from typing import List
 from zoneinfo import ZoneInfo
 from minio.error import S3Error
 import re, json, subprocess, imageio_ffmpeg as iio
@@ -18,7 +18,7 @@ import src.common.global_variables as config
 from src.common.progress_bar import ProgressBar
 
 
-def list_objects(client, bucket, prefix) -> Iterable[str]:
+def list_objects(client, bucket, prefix):
     """List all objects from a given MinIO bucket and prefix."""
     for obj in client.list_objects(bucket, prefix=prefix, recursive=True):
         if not obj.object_name.endswith("/"):

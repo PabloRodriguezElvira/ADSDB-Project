@@ -1,4 +1,3 @@
-import os
 import requests
 from pathlib import Path
 from io import BytesIO
@@ -17,7 +16,7 @@ import src.common.global_variables as config
 def pick_best_video_file(video_files: list):
     """
     Select the most suitable video file from a Pexels video entry.
-    Prefer HD (≤1080p) files; otherwise, choose the file with the largest width/bitrate.
+    Prefer HD (<=1080p) files; otherwise, choose the file with the largest width/bitrate.
     """
 
     if not video_files:
@@ -124,7 +123,7 @@ def main():
     """
     
     query = "healthy food cooking"
-    videos_amount = 1000
+    videos_amount = 50
 
     client = get_minio_client()
 
