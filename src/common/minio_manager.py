@@ -65,6 +65,12 @@ def main():
         create_folder(config.REJECTED_BUCKET, f)
         print(f"[OK]: {config.REJECTED_BUCKET}/{f}")
 
+    # Create fine-tuning bucket
+    create_bucket(config.FINE_TUNING_BUCKET)
+    for f in config.FINE_TUNING_FOLDERS:
+        create_folder(config.FINE_TUNING_BUCKET, f)
+        print(f"[OK]: {config.FINE_TUNING_BUCKET}/{f}")
+
 
 if __name__ == "__main__":
     """

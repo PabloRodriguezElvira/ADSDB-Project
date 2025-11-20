@@ -5,6 +5,7 @@ LANDING_BUCKET = "landing-zone"
 FORMATTED_BUCKET = "formatted-zone"
 TRUSTED_BUCKET = "trusted-zone"
 REJECTED_BUCKET = "rejected-zone"
+FINE_TUNING_BUCKET = "fine-tuning-zone"
 
 
 # ------------- Paths for each zone -------------
@@ -24,6 +25,8 @@ LANDING_IMAGE_PATH = "persistent_landing/image_data/"
 LANDING_VIDEO_PATH = "persistent_landing/video_data/"
 LANDING_TEXT_PATH = "persistent_landing/text_data/"
 
+FINE_TUNING_PATH = "fine_tuning/"
+FINE_TUNING_IMAGE_PATH = "fine_tuning/image_data/"
 
 # ------------- Sub buckets -------------
 LANDING_FOLDERS = [
@@ -50,6 +53,10 @@ REJECTED_FOLDERS = [
     REJECTED_VIDEO_PATH
 ]
 
+FINE_TUNING_FOLDERS = [
+    FINE_TUNING_PATH,
+    FINE_TUNING_IMAGE_PATH
+]
 
 # ------------- Video ingestion -------------
 PEXELS_API_KEY = "4tnQhPc8qWhAYxhTjjywT0HIqG4XXELn9mniXCpMJR9xlTcNFx6veL2Y"
