@@ -15,6 +15,7 @@ src/.ipynb_checkpoints/
 
 # Estructura de buckets de minIO
 data_MinIO/
+data/
 
 # Carpeta de embeddings
 embeddings/

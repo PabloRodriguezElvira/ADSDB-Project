@@ -14,7 +14,7 @@ from src.multi_modal_tasks.multi_modality_task import find_similar_cross_modalit
 BASE_DIR = Path(__file__).resolve().parents[2]
 
 # ------------------- CONFIG -------------------
-N_TEXTS = 500          # primeros 500 textos
+N_TEXTS = 5          # primeros 500 textos
 K_CANDIDATES = 10      # cuántas imágenes candidatas pedimos por texto
 LOCAL_OUTPUT = BASE_DIR / "data" / "text_image_matches.json"
 MINIO_OUTPUT_KEY = f"{config.FINE_TUNING_PATH}text_image_matches.json"  # opcional subir a MinIO
@@ -58,9 +58,11 @@ def build_trusted_image_key(image_id: str) -> str:
 
     return f"{config.TRUSTED_IMAGE_PATH}{name}"
 
-def copy_trusted_image_to_finetuning(client, image_id: str) -> str:
+
+def copy_trusted_image_to_finetuning(client, image_id: str, metadata: Dict[str, Any] | None = None) -> str:
+    # Prefer the original MinIO key stored during ingestion; fallback to hash-based name
     src_bucket = config.TRUSTED_BUCKET
-    src_key = build_trusted_image_key(image_id)
+    src_key = (metadata or {}).get("source_key") or build_trusted_image_key(image_id)
 
     obj = client.get_object(src_bucket, src_key)
     data = obj.read()
@@ -139,7 +141,7 @@ def match_first_500_texts_to_unique_images(
 
         # 3) copiar SOLO la imagen elegida a fine_tuning/images
         if copy_images_to_finetuning:
-            finetuning_key = copy_trusted_image_to_finetuning(client, chosen_image_id)
+            finetuning_key = copy_trusted_image_to_finetuning(client, chosen_image_id, chosen_metadata)
 
         matches.append(
             {
