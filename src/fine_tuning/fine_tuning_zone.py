@@ -1,6 +1,7 @@
 import io
 import json
 import os
+import base64
 from pathlib import Path
 from typing import List, Dict, Any
 
@@ -15,8 +16,8 @@ from src.multi_modal_tasks.multi_modality_task import find_similar_cross_modalit
 BASE_DIR = Path(__file__).resolve().parents[2]
 
 # ------------------- CONFIG -------------------
-N_TEXTS = None        # how many texts we process
-K_CANDIDATES = 10     # how many images are candidates of pairing with a text
+N_TEXTS = 5        # how many texts we process
+K_CANDIDATES = 10   # how many images are candidates of pairing with a text
 LOCAL_OUTPUT = BASE_DIR / "data" / "text_image_matches.json"
 MINIO_OUTPUT_KEY = f"{config.FINE_TUNING_PATH}text_image_matches.json"  # upload to MinIO
 
@@ -53,7 +54,7 @@ def load_trusted_recipes_texts(n_texts: int) -> List[str]:
     return texts[:n_texts]
 
 
-# ------------------- MATCH TEXTO - IMAGEN -------------------
+# ------------------- IMÁGENES TRUSTED -------------------
 
 def build_trusted_image_key(image_id: str) -> str:
     name = os.path.basename(image_id)
@@ -64,8 +65,15 @@ def build_trusted_image_key(image_id: str) -> str:
     return f"{config.TRUSTED_IMAGE_PATH}{name}"
 
 
-def copy_trusted_image_to_finetuning(client, image_id: str, metadata: Dict[str, Any] | None = None) -> str:
-    # Prefer the original MinIO key stored during ingestion; fallback to hash-based name
+def get_trusted_image_as_base64(
+    client,
+    image_id: str,
+    metadata: Dict[str, Any] | None = None,
+) -> str:
+    """
+    Lee la imagen desde el bucket TRUSTED y devuelve su contenido en base64
+    sin moverla a ningún otro bucket.
+    """
     src_bucket = config.TRUSTED_BUCKET
     src_key = (metadata or {}).get("source_key") or build_trusted_image_key(image_id)
 
@@ -73,29 +81,20 @@ def copy_trusted_image_to_finetuning(client, image_id: str, metadata: Dict[str, 
     data = obj.read()
     obj.close(); obj.release_conn()
 
-    dst_basename = os.path.basename(src_key)
-    dst_key = f"{config.FINE_TUNING_IMAGE_PATH}{dst_basename}"
+    # codificar a base64 (string UTF-8)
+    return base64.b64encode(data).decode("utf-8")
 
-    client.put_object(
-        config.FINE_TUNING_BUCKET,
-        dst_key,
-        io.BytesIO(data),
-        length=len(data),
-        content_type="image/png",
-    )
 
-    return dst_key
-
+# ------------------- MATCH TEXTO - IMAGEN -------------------
 
 def match_texts_to_unique_images(
     save_local: bool = True,
     save_to_minio: bool = False,
-    copy_images_to_finetuning: bool = True,
 ) -> List[Dict[str, Any]]:
     """
     - Empareja los primeros N_TEXT textos (trusted) con imágenes únicas (trusted/images).
     - Para cada texto se escoge 1 imagen distinta (sin reutilizar).
-    - Solo se copia ESA imagen escogida a fine_tuning/images.
+    - NO se mueve la imagen; se guarda su contenido en base64 en el JSON de matches.
     - Si no se puede encontrar una imagen única para algún texto => lanza error.
     """
     texts = load_trusted_recipes_texts(N_TEXTS)
@@ -133,7 +132,6 @@ def match_texts_to_unique_images(
             chosen_image_id = None
             chosen_distance = None
             chosen_metadata = None
-            finetuning_key = None
 
             # 2) elegir la primera candidata que NO esté usada
             for img_id, dist, meta in zip(image_ids, distances, metadatas):
@@ -152,9 +150,12 @@ def match_texts_to_unique_images(
 
             used_image_ids.add(chosen_image_id)
 
-            # 3) copiar SOLO la imagen elegida a fine_tuning/images
-            if copy_images_to_finetuning:
-                finetuning_key = copy_trusted_image_to_finetuning(client, chosen_image_id, chosen_metadata)
+            # 3) obtener la imagen en base64 desde el bucket TRUSTED
+            image_base64 = get_trusted_image_as_base64(
+                client,
+                chosen_image_id,
+                chosen_metadata,
+            )
 
             matches.append(
                 {
@@ -163,7 +164,7 @@ def match_texts_to_unique_images(
                     "image_id": chosen_image_id,
                     "distance": float(chosen_distance) if chosen_distance is not None else None,
                     "image_metadata": chosen_metadata,
-                    "fine_tuning_key": finetuning_key,
+                    "image_base64": image_base64,
                 }
             )
             progress.update(1)
@@ -198,6 +199,6 @@ def match_texts_to_unique_images(
 if __name__ == "__main__":
     matches = match_texts_to_unique_images(
         save_local=True,
-        save_to_minio=True, 
+        save_to_minio=True,
     )
     print(f"Total de matches: {len(matches)}")
