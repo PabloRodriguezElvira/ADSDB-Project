@@ -6,7 +6,7 @@ FORMATTED_BUCKET = "formatted-zone"
 TRUSTED_BUCKET = "trusted-zone"
 REJECTED_BUCKET = "rejected-zone"
 FINE_TUNING_BUCKET = "fine-tuning-zone"
-
+AUGMENTATION_BUCKET = "augmentation-zone"
 
 # ------------- Paths for each zone -------------
 FORMATTED_IMAGE_PATH = "formatted/image_data/"
@@ -27,6 +27,8 @@ LANDING_TEXT_PATH = "persistent_landing/text_data/"
 
 FINE_TUNING_PATH = "fine_tuning/"
 FINE_TUNING_IMAGE_PATH = "fine_tuning/image_data/"
+
+AUGMENTATION_PATH = "augmentation/"
 
 # ------------- Sub buckets -------------
 LANDING_FOLDERS = [
@@ -56,6 +58,9 @@ REJECTED_FOLDERS = [
 FINE_TUNING_FOLDERS = [
     FINE_TUNING_PATH,
     FINE_TUNING_IMAGE_PATH
+]
+AUGMENTATION_FOLDERS = [
+    AUGMENTATION_PATH
 ]
 
 # ------------- Video ingestion -------------

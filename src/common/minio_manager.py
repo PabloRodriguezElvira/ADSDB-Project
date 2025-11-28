@@ -71,6 +71,12 @@ def main():
         create_folder(config.FINE_TUNING_BUCKET, f)
         print(f"[OK]: {config.FINE_TUNING_BUCKET}/{f}")
 
+    # Create augmentation bucket
+    create_bucket(config.AUGMENTATION_BUCKET)
+    for f in config.AUGMENTATION_FOLDERS:
+        create_folder(config.AUGMENTATION_BUCKET, f)
+        print(f"[OK]: {config.AUGMENTATION_BUCKET}/{f}")
+
 
 if __name__ == "__main__":
     """
