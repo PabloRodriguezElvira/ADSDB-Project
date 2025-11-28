@@ -15,8 +15,8 @@ from src.multi_modal_tasks.multi_modality_task import find_similar_cross_modalit
 BASE_DIR = Path(__file__).resolve().parents[2]
 
 # ------------------- CONFIG -------------------
-N_TEXTS = None        # how many texts we process
-K_CANDIDATES = 10     # how many images are candidates of pairing with a text
+N_TEXTS = 1000          # how many texts we process
+K_CANDIDATES = 100      # how many images are candidates of pairing with a text
 LOCAL_OUTPUT = BASE_DIR / "data" / "text_image_matches.json"
 MINIO_OUTPUT_KEY = f"{config.FINE_TUNING_PATH}text_image_matches.json"  # upload to MinIO
 
@@ -30,8 +30,17 @@ def load_trusted_recipes_texts(n_texts: int) -> List[str]:
     try:
         obj = client.get_object(config.TRUSTED_BUCKET, key)
         chunks: list[bytes] = []
-        for chunk in obj.stream(1024 * 1024):
-            chunks.append(chunk)
+        total_bytes = getattr(obj, "length", None) or getattr(obj, "size", None)
+        with ProgressBar(
+            total=total_bytes,
+            description="Downloading trusted texts",
+            unit="B",
+            unit_scale=True,
+        ) as progress:
+            for chunk in obj.stream(1024 * 1024):
+                chunks.append(chunk)
+                progress.update(len(chunk))
+
         raw = b"".join(chunks)
 
         obj.close(); obj.release_conn()
