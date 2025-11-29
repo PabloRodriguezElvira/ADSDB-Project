@@ -20,13 +20,10 @@ BASE_DIR = Path(__file__).resolve().parents[2]
 INPUT_BUCKET = config.FINE_TUNING_BUCKET
 INPUT_MATCHES_KEY = f"{config.FINE_TUNING_PATH}text_image_matches.json"
 
-# Bucket de salida
-AUGMENTATION_BUCKET = "augmentation_zone"
-
 # Claves de salida en MinIO
-TRAIN_JSON_KEY = f"{config.FINE_TUNING_PATH}train_text_image_matches.json"
-TEST_JSON_KEY  = f"{config.FINE_TUNING_PATH}test_text_image_matches.json"
-DEV_JSON_KEY   = f"{config.FINE_TUNING_PATH}dev_text_image_matches.json"
+TRAIN_JSON_KEY = f"{config.AUGMENTATION_PATH}train_text_image_matches.json"
+TEST_JSON_KEY  = f"{config.AUGMENTATION_PATH}test_text_image_matches.json"
+DEV_JSON_KEY   = f"{config.AUGMENTATION_PATH}dev_text_image_matches.json"
 
 # Salida local
 LOCAL_TRAIN_JSON = BASE_DIR / "data" / "train_text_image_matches.json"
@@ -169,7 +166,7 @@ def split_indices(
 
 def augment_and_split(
     n_aug_per_sample: int = N_AUG_PER_SAMPLE,
-    save_local: bool = True,
+    save_local: bool = False,
     save_to_minio: bool = True,
 ) -> tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]]]:
     """
@@ -301,39 +298,39 @@ def augment_and_split(
                 train_samples, ensure_ascii=False, indent=2
             ).encode("utf-8")
             client.put_object(
-                AUGMENTATION_BUCKET,
+                config.AUGMENTATION_BUCKET,
                 TRAIN_JSON_KEY,
                 io.BytesIO(payload),
                 length=len(payload),
                 content_type="application/json",
             )
-            print(f"TRAIN JSON subido a MinIO: {AUGMENTATION_BUCKET}/{TRAIN_JSON_KEY}")
+            print(f"TRAIN JSON subido a MinIO: {config.AUGMENTATION_BUCKET}/{TRAIN_JSON_KEY}")
 
             # TEST
             payload = json.dumps(
                 test_samples, ensure_ascii=False, indent=2
             ).encode("utf-8")
             client.put_object(
-                AUGMENTATION_BUCKET,
+                config.AUGMENTATION_BUCKET,
                 TEST_JSON_KEY,
                 io.BytesIO(payload),
                 length=len(payload),
                 content_type="application/json",
             )
-            print(f"TEST JSON subido a MinIO: {AUGMENTATION_BUCKET}/{TEST_JSON_KEY}")
+            print(f"TEST JSON subido a MinIO: {config.AUGMENTATION_BUCKET}/{TEST_JSON_KEY}")
 
             # DEV
             payload = json.dumps(
                 dev_samples, ensure_ascii=False, indent=2
             ).encode("utf-8")
             client.put_object(
-                AUGMENTATION_BUCKET,
+                config.AUGMENTATION_BUCKET,
                 DEV_JSON_KEY,
                 io.BytesIO(payload),
                 length=len(payload),
                 content_type="application/json",
             )
-            print(f"DEV JSON subido a MinIO: {AUGMENTATION_BUCKET}/{DEV_JSON_KEY}")
+            print(f"DEV JSON subido a MinIO: {config.AUGMENTATION_BUCKET}/{DEV_JSON_KEY}")
 
         except S3Error as e:
             raise RuntimeError(f"Error subiendo JSONs de augmentation a MinIO: {e}")
@@ -344,7 +341,7 @@ def augment_and_split(
 if __name__ == "__main__":
     train, test, dev = augment_and_split(
         n_aug_per_sample=N_AUG_PER_SAMPLE,
-        save_local=True,
+        save_local=False,
         save_to_minio=True,
     )
     print(
