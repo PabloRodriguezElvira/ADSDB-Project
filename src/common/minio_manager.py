@@ -77,10 +77,23 @@ def main():
         create_folder(config.AUGMENTATION_BUCKET, f)
         print(f"[OK]: {config.AUGMENTATION_BUCKET}/{f}")
 
+    # Create split zone bucket
+    create_bucket(config.SPLIT_BUCKET)
+    for f in config.SPLIT_FOLDERS:
+        create_folder(config.SPLIT_BUCKET, f)
+        print(f"[OK]: {config.SPLIT_BUCKET}/{f}")
+
+    # Create training dataset zone bucket
+    create_bucket(config.TRAINING_DATASET_BUCKET)
+    for f in config.TRAINING_DATASET_FOLDERS:
+        create_folder(config.TRAINING_DATASET_BUCKET, f)
+        print(f"[OK]: {config.TRAINING_DATASET_BUCKET}/{f}")
+ 
+
 
 if __name__ == "__main__":
     """
-    Entry poiny: runs main and handles MinIO errors
+    Entry point: runs main and handles MinIO errors
     """
 
     try:

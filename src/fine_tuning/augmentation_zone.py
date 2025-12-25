@@ -3,7 +3,7 @@ import json
 import base64
 import random
 from pathlib import Path
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any
 
 from PIL import Image, ImageEnhance, ImageOps
 from minio.error import S3Error
@@ -20,15 +20,9 @@ BASE_DIR = Path(__file__).resolve().parents[2]
 INPUT_BUCKET = config.FINE_TUNING_BUCKET
 INPUT_MATCHES_KEY = f"{config.FINE_TUNING_PATH}text_image_matches.json"
 
-# Claves de salida en MinIO
-TRAIN_JSON_KEY = f"{config.AUGMENTATION_PATH}train_text_image_matches.json"
-TEST_JSON_KEY  = f"{config.AUGMENTATION_PATH}test_text_image_matches.json"
-DEV_JSON_KEY   = f"{config.AUGMENTATION_PATH}dev_text_image_matches.json"
-
-# Salida local
-LOCAL_TRAIN_JSON = BASE_DIR / "data" / "train_text_image_matches.json"
-LOCAL_TEST_JSON  = BASE_DIR / "data" / "test_text_image_matches.json"
-LOCAL_DEV_JSON   = BASE_DIR / "data" / "dev_text_image_matches.json"
+# Salida (un único JSON) en MinIO y local
+AUGMENTED_JSON_KEY = f"{config.AUGMENTATION_PATH}augmented_text_image_matches.json"
+LOCAL_AUGMENTED_JSON = BASE_DIR / "data" / "augmented_text_image_matches.json"
 
 # Número de augmentations por par texto-imagen
 N_AUG_PER_SAMPLE = 1
@@ -135,48 +129,19 @@ def load_matches_from_minio() -> List[Dict[str, Any]]:
     return matches
 
 
-# ------------------- SPLIT TRAIN / TEST / DEV -------------------
-
-def split_indices(
-    num_samples: int,
-    train_ratio: float = 0.8,
-    test_ratio: float = 0.1,
-    seed: int = 42,
-) -> tuple[set[int], set[int], set[int]]:
-    """
-    Divide los índices [0..num_samples-1] en TRAIN/TEST/DEV.
-    Aquí num_samples es el nº de ejemplos DESPUÉS de augmentation.
-    """
-    all_indices = list(range(num_samples))
-    rng = random.Random(seed)
-    rng.shuffle(all_indices)
-
-    n_train = int(num_samples * train_ratio)
-    n_test  = int(num_samples * test_ratio)
-    n_dev   = num_samples - n_train - n_test  # resto
-
-    train_idx = set(all_indices[:n_train])
-    test_idx  = set(all_indices[n_train:n_train + n_test])
-    dev_idx   = set(all_indices[n_train + n_test:])
-
-    return train_idx, test_idx, dev_idx
-
-
 # ------------------- PIPELINE PRINCIPAL -------------------
-
-def augment_and_split(
+def augment_dataset(
     n_aug_per_sample: int = N_AUG_PER_SAMPLE,
     save_local: bool = False,
     save_to_minio: bool = True,
-) -> tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]]]:
+) -> List[Dict[str, Any]]:
     """
     - Lee `text_image_matches.json` (con `image_base64`) desde MinIO.
     - Construye un dataset con:
         * todas las muestras ORIGINALES
         * y n_aug_per_sample augmentations por cada una
       => tamaño total = num_original * (1 + n_aug_per_sample)
-    - Luego hace un split 80/10/10 sobre ese dataset total.
-    - Genera 3 JSON: TRAIN / TEST / DEV.
+    - Genera un único JSON con todas las muestras (sin split).
     """
     original_matches = load_matches_from_minio()
     num_original = len(original_matches)
@@ -186,7 +151,7 @@ def augment_and_split(
     # 1) Construir dataset (original + augmentations)
     with ProgressBar(
         total=num_original,
-        description="Generando originales + augmentations",
+        description="Generando JSON con originales + augmentations",
         unit="sample",
         unit_scale=False,
     ) as progress:
@@ -254,96 +219,40 @@ def augment_and_split(
 
             progress.update(1)
 
-    # 2) Split sobre TODO el dataset (original + augmentado)
-    num_total = len(all_samples)
-    train_idx, test_idx, dev_idx = split_indices(num_total)
-
-    train_samples: List[Dict[str, Any]] = []
-    test_samples:  List[Dict[str, Any]] = []
-    dev_samples:   List[Dict[str, Any]] = []
-
-    for idx, sample in enumerate(all_samples):
-        if idx in train_idx:
-            sample["split"] = "train"
-            train_samples.append(sample)
-        elif idx in test_idx:
-            sample["split"] = "test"
-            test_samples.append(sample)
-        else:
-            sample["split"] = "dev"
-            dev_samples.append(sample)
-
-    # 3) Guardar local
+    # 2) Guardar local
     if save_local:
-        LOCAL_TRAIN_JSON.parent.mkdir(parents=True, exist_ok=True)
+        LOCAL_AUGMENTED_JSON.parent.mkdir(parents=True, exist_ok=True)
 
-        with LOCAL_TRAIN_JSON.open("w", encoding="utf-8") as f:
-            json.dump(train_samples, f, ensure_ascii=False, indent=2)
-        print(f"TRAIN JSON guardado en local: {LOCAL_TRAIN_JSON}")
+        with LOCAL_AUGMENTED_JSON.open("w", encoding="utf-8") as f:
+            json.dump(all_samples, f, ensure_ascii=False, indent=2)
+        print(f"JSON guardado en local: {LOCAL_AUGMENTED_JSON}")
 
-        with LOCAL_TEST_JSON.open("w", encoding="utf-8") as f:
-            json.dump(test_samples, f, ensure_ascii=False, indent=2)
-        print(f"TEST JSON guardado en local: {LOCAL_TEST_JSON}")
-
-        with LOCAL_DEV_JSON.open("w", encoding="utf-8") as f:
-            json.dump(dev_samples, f, ensure_ascii=False, indent=2)
-        print(f"DEV JSON guardado en local: {LOCAL_DEV_JSON}")
-
-    # 4) Guardar en MinIO
+    # 3) Guardar en MinIO
     if save_to_minio:
         client = get_minio_client()
         try:
-            # TRAIN
             payload = json.dumps(
-                train_samples, ensure_ascii=False, indent=2
+                all_samples, ensure_ascii=False, indent=2
             ).encode("utf-8")
             client.put_object(
                 config.AUGMENTATION_BUCKET,
-                TRAIN_JSON_KEY,
+                AUGMENTED_JSON_KEY,
                 io.BytesIO(payload),
                 length=len(payload),
                 content_type="application/json",
             )
-            print(f"TRAIN JSON subido a MinIO: {config.AUGMENTATION_BUCKET}/{TRAIN_JSON_KEY}")
-
-            # TEST
-            payload = json.dumps(
-                test_samples, ensure_ascii=False, indent=2
-            ).encode("utf-8")
-            client.put_object(
-                config.AUGMENTATION_BUCKET,
-                TEST_JSON_KEY,
-                io.BytesIO(payload),
-                length=len(payload),
-                content_type="application/json",
-            )
-            print(f"TEST JSON subido a MinIO: {config.AUGMENTATION_BUCKET}/{TEST_JSON_KEY}")
-
-            # DEV
-            payload = json.dumps(
-                dev_samples, ensure_ascii=False, indent=2
-            ).encode("utf-8")
-            client.put_object(
-                config.AUGMENTATION_BUCKET,
-                DEV_JSON_KEY,
-                io.BytesIO(payload),
-                length=len(payload),
-                content_type="application/json",
-            )
-            print(f"DEV JSON subido a MinIO: {config.AUGMENTATION_BUCKET}/{DEV_JSON_KEY}")
+            print(f"JSON subido a MinIO: {config.AUGMENTATION_BUCKET}/{AUGMENTED_JSON_KEY}")
 
         except S3Error as e:
-            raise RuntimeError(f"Error subiendo JSONs de augmentation a MinIO: {e}")
+            raise RuntimeError(f"Error subiendo JSON de augmentation a MinIO: {e}")
 
-    return train_samples, test_samples, dev_samples
+    return all_samples
 
 
 if __name__ == "__main__":
-    train, test, dev = augment_and_split(
+    samples = augment_dataset(
         n_aug_per_sample=N_AUG_PER_SAMPLE,
         save_local=False,
         save_to_minio=True,
     )
-    print(
-        f"Total muestras -> TRAIN: {len(train)}, TEST: {len(test)}, DEV: {len(dev)}"
-    )
+    print(f"Total muestras generadas: {len(samples)}")

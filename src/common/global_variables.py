@@ -7,8 +7,15 @@ TRUSTED_BUCKET = "trusted-zone"
 REJECTED_BUCKET = "rejected-zone"
 FINE_TUNING_BUCKET = "fine-tuning-zone"
 AUGMENTATION_BUCKET = "augmentation-zone"
+SPLIT_BUCKET = "split-zone"
+TRAINING_DATASET_BUCKET = "training-dataset-zone"
 
 # ------------- Paths for each zone -------------
+LANDING_TEMPORAL_PATH = "temporal_landing/"
+LANDING_IMAGE_PATH = "persistent_landing/image_data/"
+LANDING_VIDEO_PATH = "persistent_landing/video_data/"
+LANDING_TEXT_PATH = "persistent_landing/text_data/"
+
 FORMATTED_IMAGE_PATH = "formatted/image_data/"
 FORMATTED_VIDEO_PATH = "formatted/video_data/"
 FORMATTED_TEXT_PATH = "formatted/text_data/"
@@ -20,15 +27,17 @@ TRUSTED_TEXT_PATH = "trusted/text_data/"
 REJECTED_IMAGE_PATH = "rejected/image_data/"
 REJECTED_VIDEO_PATH = "rejected/video_data/"
 
-LANDING_TEMPORAL_PATH = "temporal_landing/"
-LANDING_IMAGE_PATH = "persistent_landing/image_data/"
-LANDING_VIDEO_PATH = "persistent_landing/video_data/"
-LANDING_TEXT_PATH = "persistent_landing/text_data/"
-
 FINE_TUNING_PATH = "fine_tuning/"
 FINE_TUNING_IMAGE_PATH = "fine_tuning/image_data/"
 
 AUGMENTATION_PATH = "augmentation/"
+
+SPLIT_PATH = "split/"
+
+TRAINING_DATASET_PATH = "training_dataset/"
+TRAINING_TRAIN = "training_dataset/train/"
+TRAINING_TEST = "training_dataset/test/"
+TRAINING_DEV = "training_dataset/dev/"
 
 # ------------- Sub buckets -------------
 LANDING_FOLDERS = [
@@ -61,6 +70,16 @@ FINE_TUNING_FOLDERS = [
 
 AUGMENTATION_FOLDERS = [
     AUGMENTATION_PATH
+]
+
+SPLIT_FOLDERS = [
+    SPLIT_PATH
+]
+
+TRAINING_DATASET_FOLDERS = [
+    TRAINING_TRAIN,
+    TRAINING_TEST,
+    TRAINING_DEV
 ]
 
 # ------------- Video ingestion -------------
