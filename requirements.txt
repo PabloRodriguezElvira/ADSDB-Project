@@ -17,3 +17,11 @@ diffusers
 ipykernel
 tzdata
 ipywidgets
+torch>=2.1.0
+torchvision
+transformers
+peft
+accelerate
+sentence-transformers>=2.2.0
+open_clip_torch>=2.24.0
+diffusers

@@ -101,6 +101,7 @@ def train_model():
         lora_dropout=0.05,
         bias="none"
     )
+    # Esta línea es la que "añade" el LoRA al CLIP original
     model = get_peft_model(model, lora_config)
     model.print_trainable_parameters()
 
