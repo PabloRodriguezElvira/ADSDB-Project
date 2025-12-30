@@ -1,3 +1,4 @@
+import argparse
 import io
 import json
 import os
@@ -60,6 +61,15 @@ class CLIPTrainer(Trainer):
         loss = outputs.loss
         return (loss, outputs) if return_outputs else loss
 
+    def prediction_step(self, model, inputs, prediction_loss_only, ignore_keys=None):
+        # Force eval loss computation even without labels.
+        inputs = self._prepare_inputs(inputs)
+        with torch.no_grad():
+            loss, _ = self.compute_loss(model, inputs, return_outputs=True)
+        if prediction_loss_only:
+            return (loss, None, None)
+        return (loss, None, None)
+
 # ---------------------------------------------------------
 # 2. FUNCIÓN DE PLOT ACTUALIZADA (Acepta Parámetros)
 # ---------------------------------------------------------
@@ -106,14 +116,25 @@ def plot_training_results(trainer, rank, lr):
 # ---------------------------------------------------------
 # 3. FUNCIÓN DE ENTRENAMIENTO DINÁMICA
 # ---------------------------------------------------------
-def run_hyperparameter_experiment(rank, lr):
+def resolve_device(device):
+    device = device.lower()
+    if device not in ("cpu", "gpu"):
+        raise ValueError("device must be 'cpu' or 'gpu'")
+    if device == "gpu" and not torch.cuda.is_available():
+        print("GPU solicitada pero no disponible. Usando CPU.")
+        device = "cpu"
+    return device
+
+
+def run_hyperparameter_experiment(rank, lr, device="cpu"):
+    device = resolve_device(device)
     print(f"\n" + "="*50)
-    print(f"EJECUTANDO: Rank={rank}, Learning Rate={lr}")
+    print(f"EJECUTANDO: Rank={rank}, Learning Rate={lr}, Device={device}")
     print("="*50)
 
     model_id = "openai/clip-vit-base-patch32"
-    processor = CLIPProcessor.from_pretrained(model_id)
-    model = CLIPModel.from_pretrained(model_id, device_map="cpu")
+    processor = CLIPProcessor.from_pretrained(model_id, use_fast=True)
+    model = CLIPModel.from_pretrained(model_id)
     model.config.return_loss = True 
 
     # Aplicar LoRA con el Rank actual del bucle
@@ -131,7 +152,7 @@ def run_hyperparameter_experiment(rank, lr):
 
     training_args = TrainingArguments(
         #output_dir=f"./output_r{rank}_lr{lr}", # Carpeta única
-        use_cpu=True,
+        use_cpu=(device == "cpu"),
         per_device_train_batch_size=4,
         num_train_epochs=5,
         learning_rate=lr,
@@ -158,6 +179,14 @@ def run_hyperparameter_experiment(rank, lr):
 # 4. BUCLE PRINCIPAL DE BÚSQUEDA
 # ---------------------------------------------------------
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Busqueda de hiperparametros para CLIP con LoRA.")
+    parser.add_argument(
+        "--device",
+        choices=["cpu", "gpu"],
+        default="cpu",
+        help="Dispositivo de entrenamiento (cpu o gpu).",
+    )
+    args = parser.parse_args()
     # Definimos el espacio de búsqueda (tus 3 combinaciones)
     search_space = [
         {"rank": 16, "lr": 5e-5}, # Baseline
@@ -168,7 +197,8 @@ if __name__ == "__main__":
     for experiment in search_space:
         run_hyperparameter_experiment(
             rank=experiment["rank"], # este se añade en lora pq tiene que ver con el cuerpo del modelo (capacidad)
-            lr=experiment["lr"]# este va en training arguments pq es un optimizador que solo cotnrola la velocidad
+            lr=experiment["lr"], # este va en training arguments pq es un optimizador que solo cotnrola la velocidad
+            device=args.device,
         )
     
     print("\n>>> BÚSQUEDA DE HIPERPARAMETROS COMPLETADA.")

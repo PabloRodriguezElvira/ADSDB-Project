@@ -132,7 +132,7 @@ def train_model_lora():
     model_id = "openai/clip-vit-base-patch32"
     
     # A) CARGA EN CPU (Constraint 1: Eficiencia)
-    processor = CLIPProcessor.from_pretrained(model_id)
+    processor = CLIPProcessor.from_pretrained(model_id, use_fast=True)
     model = CLIPModel.from_pretrained(model_id, device_map="cpu")
     
     # Forzamos configuración de pérdida
@@ -192,4 +192,4 @@ def train_model_lora():
     print("Entrenamiento completado.")
 
 if __name__ == "__main__":
-    train_model()
+    train_model_lora()
