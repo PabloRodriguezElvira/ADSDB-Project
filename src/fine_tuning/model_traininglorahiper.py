@@ -84,6 +84,12 @@ def plot_training_results(trainer, rank, lr):
     
     plt.figure(figsize=(12, 6))
     
+    # --- LÍNEAS VERTICALES POR ÉPOCA ---
+    # Como tienes 7 épocas y cada una son 50 pasos:
+    steps_per_epoch = 50 
+    for epoch in range(1, 8): # De 1 a 7
+        plt.axvline(x=epoch * steps_per_epoch, color='red', linestyle='--', alpha=0.3, label='Epoch End' if epoch == 1 else "")
+
     # Training Line
     plt.plot(train_steps, train_loss, label=f"Train Loss (r={rank})", color="#1f77b4", linewidth=2, alpha=0.6)
     
@@ -95,20 +101,14 @@ def plot_training_results(trainer, rank, lr):
 
     plt.xlabel("Steps")
     plt.ylabel("Loss Value")
-    plt.title(f"Experiment Search: Rank={rank}, LR={lr}")
+    plt.title(f"Experiment CLIP LORA: Rank={rank}, LR={lr} (7 Epochs)")
     plt.grid(True, linestyle=':', alpha=0.5)
     plt.legend()
     
-    # 1. Construir el nombre del archivo con los parámetros del experimento
+    # Guardado
     filename = f"search_results_r{rank}_lr{lr}.png"
-    
-    # 2. Unir la carpeta global con el nombre del archivo
     save_path = os.path.join(config.EXPERIMENTS_DIR, filename)
-    
-    # 3. GUARDAR la imagen en el disco (¡Esta línea es la que te falta!)
     plt.savefig(save_path)
-    
-    # 4. Cierra la figura para liberar memoria y empezar el siguiente experimento limpio
     plt.close() 
     
     print(f"Gráfica guardada exitosamente en: {save_path}")
@@ -153,12 +153,12 @@ def run_hyperparameter_experiment(rank, lr, device="cpu"):
     training_args = TrainingArguments(
         #output_dir=f"./output_r{rank}_lr{lr}", # Carpeta única
         use_cpu=(device == "cpu"),
-        per_device_train_batch_size=4,
-        num_train_epochs=5,
+        per_device_train_batch_size=16,# en training 16 y le añado en validation el defecto q es 8
+        num_train_epochs=7,
         learning_rate=lr,
         eval_strategy="epoch",# hacer el proceso de validaciion cada vez que termine una epoca del training 
         save_strategy="epoch",
-        logging_steps=10,
+        logging_steps=5,
         #load_best_model_at_end=True,
         metric_for_best_model="eval_loss",
         greater_is_better=False,
