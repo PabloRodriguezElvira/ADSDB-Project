@@ -25,3 +25,4 @@ accelerate
 sentence-transformers>=2.2.0
 open_clip_torch>=2.24.0
 diffusers
+matplotlib

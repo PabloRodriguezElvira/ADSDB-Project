@@ -9,6 +9,7 @@ FINE_TUNING_BUCKET = "fine-tuning-zone"
 AUGMENTATION_BUCKET = "augmentation-zone"
 SPLIT_BUCKET = "split-zone"
 TRAINING_DATASET_BUCKET = "training-dataset-zone"
+EXPERIMENTS_DIR = "image_experiments"
 
 # ------------- Paths for each zone -------------
 LANDING_TEMPORAL_PATH = "temporal_landing/"

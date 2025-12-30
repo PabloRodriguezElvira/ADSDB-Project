@@ -5,6 +5,7 @@ import random
 import numpy as np
 import torch
 from PIL import Image
+import matplotlib.pyplot as plt
 from torch.utils.data import Dataset
 from transformers import (
     CLIPProcessor, 
@@ -79,11 +80,55 @@ class CLIPTrainer(Trainer):
         outputs = model(**inputs, return_loss=True)
         loss = outputs.loss
         return (loss, outputs) if return_outputs else loss
+    
+
+#### Funcion de plot
+def plot_training_results(trainer):
+    """
+    Helper function to plot the training loss and identify the learning 'elbow'.
+    """
+    # Extract logs from the trainer state
+    history = trainer.state.log_history
+    
+    # Filter logs that contain training loss and their corresponding steps/epochs
+    train_loss = [x["loss"] for x in history if "loss" in x]
+    steps = [x["step"] for x in history if "loss" in x]
+    epochs_progress = [x["epoch"] for x in history if "loss" in x]
+
+    plt.figure(figsize=(12, 6))
+    plt.plot(steps, train_loss, label="Training Loss (Contrastive)", color="#1f77b4", linewidth=2)
+
+    # Add vertical dashed lines to mark the end of each epoch (every 400 steps)
+    # This helps correlate the 'elbow' with the number of passes over the dataset
+    epoch_count = 0
+    for i in range(len(epochs_progress)):
+        if int(epochs_progress[i]) > epoch_count:
+            epoch_count = int(epochs_progress[i])
+            plt.axvline(x=steps[i], color='red', linestyle='--', alpha=0.6, 
+                        label=f"End of Epoch {epoch_count}")
+
+    plt.xlabel("Total Training Steps (1,200 total / 400 per Epoch)")
+    plt.ylabel("Loss Value")
+    plt.title("CLIP LoRA Fine-Tuning: Learning Curve (3 Epochs)")
+    plt.grid(True, which='both', linestyle=':', alpha=0.5)
+    plt.legend()
+    
+    # --- CAMBIO AQUÍ: Usar variable global y crear carpeta ---
+    os.makedirs(config.EXPERIMENTS_DIR, exist_ok=True) # Asegura que la carpeta exista
+    
+    filename = "learning_curve_3_epochs.png"
+    save_path = os.path.join(config.EXPERIMENTS_DIR, filename) # Une la carpeta con el nombre
+    
+    # Save the curve to the results directory
+    plt.savefig(save_path)
+    plt.close() # Importante cerrar para liberar memoria
+    
+    print(f"Optimization graph saved as '{save_path}'.")
 
 # ---------------------------------------------------------
 # 3. FUNCIÓN DE ENTRENAMIENTO (LoRA - Constraint 1)
 # ---------------------------------------------------------
-def train_model():
+def train_model_lora():
     model_id = "openai/clip-vit-base-patch32"
     
     # A) CARGA EN CPU (Constraint 1: Eficiencia)
@@ -122,7 +167,7 @@ def train_model():
         #output_dir="./temp_checkpoints",
         use_cpu=True,
         per_device_train_batch_size=4,
-        num_train_epochs=1,
+        num_train_epochs=3,
         learning_rate=5e-5,
         eval_strategy="epoch",
         logging_steps=10,
@@ -140,7 +185,8 @@ def train_model():
 
     print("Iniciando Fine-Tuning en CPU con Custom CLIP Loss...")
     trainer.train()
-
+    ##
+    plot_training_results(trainer)
     # F) GUARDADO LOCAL (¡Descoméntalo cuando quieras guardar!)
     # model.save_pretrained("./final_adapter_local")
     print("Entrenamiento completado.")
