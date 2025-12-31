@@ -242,9 +242,9 @@ if __name__ == "__main__":
         {"method": "lora",  "rank": 16, "lr": 5e-5},
         {"method": "lora",  "rank": 32, "lr": 5e-5},
         {"method": "lora",  "rank": 16, "lr": 1e-4},
-        {"method": "qlora", "rank": 16, "lr": 5e-5},
-        {"method": "qlora", "rank": 32, "lr": 5e-5},
-        {"method": "qlora", "rank": 16, "lr": 1e-4},
+        #{"method": "qlora", "rank": 16, "lr": 5e-5},
+        #{"method": "qlora", "rank": 32, "lr": 5e-5},
+        #{"method": "qlora", "rank": 16, "lr": 1e-4},
     ]
 
     for exp in search_space:
