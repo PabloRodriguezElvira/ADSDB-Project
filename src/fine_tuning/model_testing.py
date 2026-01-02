@@ -15,14 +15,14 @@ from transformers import (
 from peft import LoraConfig, get_peft_model
 
 # IMPORTACIÓN DE TUS CLASES
-from src.model_trainingloraqlorahiper import MinioCLIPDataset, CLIPTrainer
+from src.fine_tuning.model_trainingloraqlorahiper import MinioCLIPDataset, CLIPTrainer
 import src.common.global_variables as config
 
 # 0. CONFIGURACIÓN
 set_seed(42)
 device = "cuda" if torch.cuda.is_available() else "cpu"
 model_id = config.MODEL_CLIP
-processor = CLIPProcessor.from_pretrained(model_id)
+processor = CLIPProcessor.from_pretrained(model_id, use_fast=True)
 
 # --- NUEVA FUNCIÓN: DESCARGA Y SIMILITUD ---
 def download_top_5_with_scores(model_zs, model_qlora, dataset, sample_idx=None):
@@ -44,7 +44,16 @@ def download_top_5_with_scores(model_zs, model_qlora, dataset, sample_idx=None):
     model_qlora.eval()
 
     # 1. Embeddings de texto normalizados
-    text_inputs = processor(text=[query_text], return_tensors="pt", padding=True).to(device)
+    max_length = getattr(model_zs.config.text_config, "max_position_embeddings", None)
+    if max_length is None:
+        max_length = getattr(model_zs.config, "max_position_embeddings", 77)
+    text_inputs = processor(
+        text=[query_text],
+        return_tensors="pt",
+        padding=True,
+        truncation=True,
+        max_length=max_length,
+    ).to(device)
     with torch.no_grad():
         text_emb_zs = model_zs.get_text_features(**text_inputs)
         text_emb_ql = model_qlora.get_text_features(**text_inputs)
@@ -104,7 +113,7 @@ def download_top_5_with_scores(model_zs, model_qlora, dataset, sample_idx=None):
     report_zs = save_results(top5_zs, scores_zs, "zero_shot")
     report_ql = save_results(top5_ql, scores_ql, "qlora")
 
-    with open(os.path.join(base_folder, "similarity_report.txt"), "w") as f:
+    with open(os.path.join(base_folder, "similarity_report.txt"), "w", encoding="utf-8") as f:
         f.writelines(report_zs + ["\n" + "-"*30 + "\n"] + report_ql)
 
     print(f"\n>>> Éxito. Resultados guardados en: {base_folder}")

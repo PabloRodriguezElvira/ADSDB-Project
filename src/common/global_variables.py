@@ -101,6 +101,9 @@ IMAGE_QUERY_PATH = "queries/images/"
 VIDEO_QUERY_PATH = "queries/videos/"
 
 
+# ------------- Models -------------
+MODEL_CLIP = "openai/clip-vit-base-patch32"
+
 
 # ------------- Additional information -------------
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tif", ".tiff", ".webp"}

@@ -1,0 +1,18 @@
+REPORT FOR ZERO_SHOT
+Query: tía rosa and ruth eichner's sweet-and-sour carrots 2 pounds carrots, peeled 3 green bell peppers, cut into 1-inch squares 3 yellow onions, cut into 1-inch wedges 3/4 cup cider vinegar 3/4 cup sugar 1 cup tomato puree 1 teaspoon mustard powder 1 teaspoon worcestershire sauce kosher salt and freshly ground black pepper 1. boil the whole carrots until tender, then cut into 1/2-inch rounds. steam the bell peppers and onions until tender. combine all the vegetables in a large crock or bowl. 2. combine the vinegar and the sugar in a saucepan over low heat. cook for 5 minutes, stirring to dissolve the sugar. stir in the tomato puree, mustard, and worcestershire. remove from the heat. pour over the vegetables and stir together well. taste and adjust seasoning with salt and pepper. cover and chill for at least 2 hours before serving.
+
+Rank 1: Sim=0.2579 | training_dataset/test/images/629.png | ✅
+Rank 2: Sim=0.2231 | training_dataset/test/images/340.png | ❌
+Rank 3: Sim=0.2215 | training_dataset/test/images/1557.png | ❌
+Rank 4: Sim=0.2206 | training_dataset/test/images/287.png | ❌
+Rank 5: Sim=0.2153 | training_dataset/test/images/1323.png | ❌
+
+------------------------------
+REPORT FOR QLORA
+Query: tía rosa and ruth eichner's sweet-and-sour carrots 2 pounds carrots, peeled 3 green bell peppers, cut into 1-inch squares 3 yellow onions, cut into 1-inch wedges 3/4 cup cider vinegar 3/4 cup sugar 1 cup tomato puree 1 teaspoon mustard powder 1 teaspoon worcestershire sauce kosher salt and freshly ground black pepper 1. boil the whole carrots until tender, then cut into 1/2-inch rounds. steam the bell peppers and onions until tender. combine all the vegetables in a large crock or bowl. 2. combine the vinegar and the sugar in a saucepan over low heat. cook for 5 minutes, stirring to dissolve the sugar. stir in the tomato puree, mustard, and worcestershire. remove from the heat. pour over the vegetables and stir together well. taste and adjust seasoning with salt and pepper. cover and chill for at least 2 hours before serving.
+
+Rank 1: Sim=0.3245 | training_dataset/test/images/340.png | ❌
+Rank 2: Sim=0.2939 | training_dataset/test/images/629.png | ✅
+Rank 3: Sim=0.2915 | training_dataset/test/images/64.png | ❌
+Rank 4: Sim=0.2871 | training_dataset/test/images/1980.png | ❌
+Rank 5: Sim=0.2759 | training_dataset/test/images/1412.png | ❌
