@@ -1,0 +1,18 @@
+REPORT FOR ZERO_SHOT
+Query: cheddar chicken tenders with wilted spinach 2 tablespoons olive oil 1 1/2 cups cheez-it cheddar crackers (3 oz) 3/4 teaspoon black pepper 1 1/4 lb chicken tenders (not coated or cooked) 1/3 cup dijon mustard 2 tablespoons unsalted butter 1 (12- to 16-oz) bag baby spinach 1/4 teaspoon salt put oven rack in lower third of oven and preheat oven to 475°f. brush a large shallow baking pan with oil (2 tablespoons). pulse crackers in a food processor until finely ground, then transfer to a wide shallow bowl and stir in 1/2 teaspoon pepper. toss tenders with mustard in a large bowl until coated, then dredge, 2 at a time, in cracker crumbs until evenly coated. arrange tenders in 1 layer, without crowding, in oiled pan. bake, turning over once, until golden brown, about 15 minutes total. meanwhile, melt butter in a 5- to 6-quart heavy pot over moderate heat, then cook spinach, covered, turning with tongs, until spinach is just wilted, about 2 minutes. stir in salt and remaining 1/4 teaspoon pepper, then serve spinach with chicken.
+
+Rank 1: Sim=0.2665 | training_dataset/test/images/120.png | ❌
+Rank 2: Sim=0.2454 | training_dataset/test/images/110.png | ❌
+Rank 3: Sim=0.2443 | training_dataset/test/images/247.png | ❌
+Rank 4: Sim=0.2407 | training_dataset/test/images/141.png | ❌
+Rank 5: Sim=0.2388 | training_dataset/test/images/471.png | ❌
+
+------------------------------
+REPORT FOR QLORA
+Query: cheddar chicken tenders with wilted spinach 2 tablespoons olive oil 1 1/2 cups cheez-it cheddar crackers (3 oz) 3/4 teaspoon black pepper 1 1/4 lb chicken tenders (not coated or cooked) 1/3 cup dijon mustard 2 tablespoons unsalted butter 1 (12- to 16-oz) bag baby spinach 1/4 teaspoon salt put oven rack in lower third of oven and preheat oven to 475°f. brush a large shallow baking pan with oil (2 tablespoons). pulse crackers in a food processor until finely ground, then transfer to a wide shallow bowl and stir in 1/2 teaspoon pepper. toss tenders with mustard in a large bowl until coated, then dredge, 2 at a time, in cracker crumbs until evenly coated. arrange tenders in 1 layer, without crowding, in oiled pan. bake, turning over once, until golden brown, about 15 minutes total. meanwhile, melt butter in a 5- to 6-quart heavy pot over moderate heat, then cook spinach, covered, turning with tongs, until spinach is just wilted, about 2 minutes. stir in salt and remaining 1/4 teaspoon pepper, then serve spinach with chicken.
+
+Rank 1: Sim=0.2708 | training_dataset/test/images/43.png | ❌
+Rank 2: Sim=0.2688 | training_dataset/test/images/322.png | ✅
+Rank 3: Sim=0.2585 | training_dataset/test/images/247.png | ❌
+Rank 4: Sim=0.2242 | training_dataset/test/images/1496.png | ❌
+Rank 5: Sim=0.2236 | training_dataset/test/images/471.png | ❌

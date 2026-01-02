@@ -1,0 +1,18 @@
+REPORT FOR ZERO_SHOT
+Query: orange balsamic glaze 1 1/2 tablespoons unsalted butter 1 cup finely chopped shallot 1 cup thawed frozen orange juice concentrate (8 oz) 1/2 cup water 1/2 cup sweet orange preserves 1/2 cup balsamic vinegar 1 tablespoon salt 1/2 tablespoon cracked black peppercorns 1 1/2 teaspoons finely grated fresh orange zest heat butter in a 3-quart heavy saucepan over moderate heat until foam subsides, then cook shallot, stirring, until golden brown, about 5 minutes. stir in remaining ingredients and simmer briskly, uncovered, stirring occasionally, until thickened and reduced to about 2 1/4 cups, about 25 minutes.
+
+Rank 1: Sim=0.2638 | training_dataset/test/images/1205.png | ❌
+Rank 2: Sim=0.2614 | training_dataset/test/images/1107.png | ❌
+Rank 3: Sim=0.2586 | training_dataset/test/images/365.png | ❌
+Rank 4: Sim=0.2561 | training_dataset/test/images/897.png | ❌
+Rank 5: Sim=0.2509 | training_dataset/test/images/117.png | ❌
+
+------------------------------
+REPORT FOR QLORA
+Query: orange balsamic glaze 1 1/2 tablespoons unsalted butter 1 cup finely chopped shallot 1 cup thawed frozen orange juice concentrate (8 oz) 1/2 cup water 1/2 cup sweet orange preserves 1/2 cup balsamic vinegar 1 tablespoon salt 1/2 tablespoon cracked black peppercorns 1 1/2 teaspoons finely grated fresh orange zest heat butter in a 3-quart heavy saucepan over moderate heat until foam subsides, then cook shallot, stirring, until golden brown, about 5 minutes. stir in remaining ingredients and simmer briskly, uncovered, stirring occasionally, until thickened and reduced to about 2 1/4 cups, about 25 minutes.
+
+Rank 1: Sim=0.2881 | training_dataset/test/images/1205.png | ❌
+Rank 2: Sim=0.2795 | training_dataset/test/images/1196.png | ❌
+Rank 3: Sim=0.2698 | training_dataset/test/images/1204.png | ❌
+Rank 4: Sim=0.2659 | training_dataset/test/images/1980.png | ❌
+Rank 5: Sim=0.2656 | training_dataset/test/images/117.png | ❌

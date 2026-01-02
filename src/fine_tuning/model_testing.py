@@ -30,7 +30,8 @@ def download_top_5_with_scores(model_zs, model_qlora, dataset, sample_idx=None):
     Busca, imprime, calcula similitudes y DESCARGA las imágenes en carpetas locales.
     """
     if sample_idx is None:
-        sample_idx = random.randint(0, len(dataset) - 1)
+        #sample_idx = random.randint(0, len(dataset) - 1)
+        sample_idx = 2
     
     query_text = dataset.matches[sample_idx]["text"]
     correct_path = dataset.matches[sample_idx]["image_path"]
