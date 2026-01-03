@@ -21,6 +21,7 @@ import src.common.global_variables as config
 # 0. CONFIGURACIÓN
 set_seed(42)
 device = "cuda" if torch.cuda.is_available() else "cpu"
+
 model_id = config.MODEL_CLIP
 processor = CLIPProcessor.from_pretrained(model_id, use_fast=True)
 
@@ -174,6 +175,22 @@ def plot_final_test_evolution(history, loss_zs_baseline):
     plt.savefig(os.path.join(config.EXPERIMENTS_DIR, "final_test_evolution.png"))
     plt.show()
 
+# --- REPORTE DE EFICIENCIA ---
+def print_efficiency_report(method, rank, lr, trainable_params, all_params, train_result, peak_mem):
+    total_time = train_result.metrics["train_runtime"]
+    samples_per_second = train_result.metrics["train_samples_per_second"]
+    
+    print("\n" + "="*40)
+    print(f"📊 REPORTE DE EFICIENCIA: {method.upper()}")
+    print(f"Configuración: Rank={rank}, LR={lr}")
+    print("-" * 40)
+    print(f"✅ Parámetros Entrenables: {trainable_params:,}")
+    print(f"✅ % del Modelo Original: {100 * trainable_params / all_params:.4f}%")
+    print(f"✅ Tiempo Total: {total_time:.2f} segundos")
+    print(f"✅ Velocidad: {samples_per_second:.2f} imágenes/seg")
+    print(f"✅ Memoria VRAM Pico: {peak_mem:.2f} GB")
+    print("="*40 + "\n")    
+
 # --- BLOQUE PRINCIPAL ---
 if __name__ == "__main__":
     # 1. BASELINE ZERO-SHOT
@@ -197,16 +214,36 @@ if __name__ == "__main__":
     print("\nEntrenando QLoRA Champion...")
     bnb_config = BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type="nf4", bnb_4bit_compute_dtype=torch.float16)
     model_qlora = CLIPModel.from_pretrained(model_id, quantization_config=bnb_config, device_map="auto")
-    model_qlora = get_peft_model(model_qlora, LoraConfig(r=16, lora_alpha=32, target_modules=["q_proj", "v_proj"]))
+    lora_rank = 16
+    lora_lr = 1e-4
+    model_qlora = get_peft_model(
+        model_qlora,
+        LoraConfig(r=lora_rank, lora_alpha=lora_rank * 2, target_modules=["q_proj", "v_proj"])
+    )
+    trainable_params, all_params = model_qlora.get_nb_trainable_parameters()
 
     train_ds = MinioCLIPDataset(config.TRAINING_DATASET_BUCKET, config.TRAINING_TRAIN, processor)
     training_args = TrainingArguments(
         output_dir="./final_test_run", per_device_train_batch_size=16, 
-        num_train_epochs=5, learning_rate=1e-4, eval_strategy="epoch", 
+        num_train_epochs=5, learning_rate=lora_lr, eval_strategy="epoch", 
         report_to="none", remove_unused_columns=False
     )
     trainer = CLIPTrainer(model=model_qlora, args=training_args, train_dataset=train_ds, eval_dataset=test_ds)
-    trainer.train()
+    if torch.cuda.is_available():
+        torch.cuda.reset_peak_memory_stats()
+    train_result = trainer.train()
+    peak_mem = 0
+    if torch.cuda.is_available():
+        peak_mem = torch.cuda.max_memory_allocated() / (1024 ** 3)
+    print_efficiency_report(
+        "qlora",
+        lora_rank,
+        lora_lr,
+        trainable_params,
+        all_params,
+        train_result,
+        peak_mem
+    )
 
     # 3. RESULTADOS FINALES Y DESCARGA CUALITATIVA
     stats_qlora = get_top_k_stats(model_qlora, test_loader, device)

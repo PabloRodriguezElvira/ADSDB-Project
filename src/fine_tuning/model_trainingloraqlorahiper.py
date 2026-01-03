@@ -129,7 +129,9 @@ def print_efficiency_report(method, rank, lr, trainable_params, all_params, trai
 # ---------------------------------------------------------
 def resolve_device(device):
     device = device.lower()
-    if device == "gpu" and not torch.cuda.is_available():
+    if device == "auto":
+        device = "gpu" if torch.cuda.is_available() else "cpu"
+    elif device == "gpu" and not torch.cuda.is_available():
         device = "cpu"
     return device
 
@@ -234,7 +236,7 @@ def run_hyperparameter_experiment(rank, lr, method, device):
 # ---------------------------------------------------------
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--device", choices=["cpu", "gpu"], default="gpu")
+    parser.add_argument("--device", choices=["auto", "cpu", "gpu"], default="auto")
     args = parser.parse_args()
 
     # ESPACIO DE BÚSQUEDA: 3 para LORA y las mismas 3 para QLORA
