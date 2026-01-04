@@ -13,6 +13,8 @@ from transformers import (
     set_seed
 )
 from peft import LoraConfig, get_peft_model
+from sklearn.decomposition import PCA
+import re
 
 # IMPORTACIÓN DE TUS CLASES
 from src.fine_tuning.model_trainingloraqlorahiper import MinioCLIPDataset, CLIPTrainer
@@ -154,7 +156,7 @@ def plot_top_k_retrieval(stats_zs, stats_qlora):
         height = rect.get_height()
         plt.annotate(f'{int(height)}', xy=(rect.get_x() + rect.get_width() / 2, height),
                     xytext=(0, 3), textcoords="offset points", ha='center', va='bottom', fontweight='bold')
-    plt.title('Top-K Image Retrieval (Test Set)', fontsize=16, fontweight='bold', pad=20)
+    plt.title('Top-5 Image Retrieval (Test Set)', fontsize=16, fontweight='bold', pad=20)
     plt.ylabel('Number of Images (Total: 200)')
     plt.xticks(x, labels)
     plt.legend()
@@ -175,23 +177,66 @@ def plot_final_test_evolution(history, loss_zs_baseline):
     plt.savefig(os.path.join(config.EXPERIMENTS_DIR, "final_test_evolution.png"))
     plt.show()
 
-# --- REPORTE DE EFICIENCIA ---
-def print_efficiency_report(method, rank, lr, trainable_params, all_params, train_result, peak_mem):
-    total_time = train_result.metrics["train_runtime"]
-    samples_per_second = train_result.metrics["train_samples_per_second"]
+def generate_pca(model, model_name, dataset, device, filename):
+    """
+    Genera un gráfico PCA individual para un modelo específico.
+    """
+    model.eval()
+    img_features, txt_features, ids = [], [], []
     
-    print("\n" + "="*40)
-    print(f"📊 REPORTE DE EFICIENCIA: {method.upper()}")
-    print(f"Configuración: Rank={rank}, LR={lr}")
-    print("-" * 40)
-    print(f"✅ Parámetros Entrenables: {trainable_params:,}")
-    print(f"✅ % del Modelo Original: {100 * trainable_params / all_params:.4f}%")
-    print(f"✅ Tiempo Total: {total_time:.2f} segundos")
-    print(f"✅ Velocidad: {samples_per_second:.2f} imágenes/seg")
-    print(f"✅ Memoria VRAM Pico: {peak_mem:.2f} GB")
-    print("="*40 + "\n")    
+    print(f"\nExtrayendo embeddings para PCA de {model_name}...")
+    with torch.no_grad():
+        # Procesamos los primeros 50 para mantener la legibilidad
+        for i in range(min(50, len(dataset))):
+            item = dataset.matches[i]
+            img_id = re.findall(r'\d+', item["image_path"])[-1]
+            ids.append(img_id)
 
-# --- BLOQUE PRINCIPAL ---
+            # Imagen
+            obj = dataset.client.get_object(dataset.bucket_name, item["image_path"])
+            img_raw = Image.open(io.BytesIO(obj.read())).convert("RGB")
+            obj.close(); obj.release_conn()
+            inputs_img = processor(images=img_raw, return_tensors="pt").to(device)
+            f_img = model.get_image_features(**inputs_img)
+            img_features.append(f_img / f_img.norm(dim=-1, keepdim=True))
+
+            # Texto
+            inputs_txt = processor(text=[item["text"]], return_tensors="pt", 
+                                   padding=True, truncation=True, max_length=77).to(device)
+            f_txt = model.get_text_features(**inputs_txt)
+            txt_features.append(f_txt / f_txt.norm(dim=-1, keepdim=True))
+
+    # Preparar datos para PCA
+    X_img = torch.cat(img_features).cpu().numpy()
+    X_txt = torch.cat(txt_features).cpu().numpy()
+    
+    pca = PCA(n_components=2)
+    coords = pca.fit_transform(np.vstack([X_img, X_txt]))
+    c_img, c_txt = coords[:len(X_img)], coords[len(X_img):]
+
+    # Configuración del gráfico
+    plt.figure(figsize=(12, 9))
+    plt.scatter(c_img[:, 0], c_img[:, 1], c='#1f77b4', marker='s', s=100, alpha=0.6, label='Images')
+    plt.scatter(c_txt[:, 0], c_txt[:, 1], c='#ff7f0e', marker='o', s=100, alpha=0.6, label='Texts')
+
+    # Dibujar líneas de unión y etiquetas para los primeros 20 pares
+    for i in range(min(20, len(ids))):
+        plt.plot([c_img[i, 0], c_txt[i, 0]], [c_img[i, 1], c_txt[i, 1]], 'gray', linestyle='--', alpha=0.3)
+        plt.annotate(ids[i], (c_img[i, 0], c_img[i, 1]), fontsize=9, fontweight='bold', color='#1f77b4')
+        plt.annotate(ids[i], (c_txt[i, 0], c_txt[i, 1]), fontsize=9, fontweight='bold', color='#ff7f0e')
+
+    plt.title(f"PCA (Embedding space): {model_name}", fontsize=16, fontweight='bold')
+    plt.xlabel("Principal Component 1")
+    plt.ylabel("Principal Component 2")
+    plt.legend()
+    plt.grid(True, linestyle=':', alpha=0.5)
+    
+    save_path = os.path.join(config.EXPERIMENTS_DIR, filename)
+    plt.savefig(save_path, bbox_inches='tight')
+    plt.show()
+    print(f">>> PCA {model_name} guardado en: {save_path}")
+
+
 if __name__ == "__main__":
     # 1. BASELINE ZERO-SHOT
     print("Evaluando Zero-Shot...")
@@ -220,7 +265,7 @@ if __name__ == "__main__":
         model_qlora,
         LoraConfig(r=lora_rank, lora_alpha=lora_rank * 2, target_modules=["q_proj", "v_proj"])
     )
-    trainable_params, all_params = model_qlora.get_nb_trainable_parameters()
+   
 
     train_ds = MinioCLIPDataset(config.TRAINING_DATASET_BUCKET, config.TRAINING_TRAIN, processor)
     training_args = TrainingArguments(
@@ -235,15 +280,7 @@ if __name__ == "__main__":
     peak_mem = 0
     if torch.cuda.is_available():
         peak_mem = torch.cuda.max_memory_allocated() / (1024 ** 3)
-    print_efficiency_report(
-        "qlora",
-        lora_rank,
-        lora_lr,
-        trainable_params,
-        all_params,
-        train_result,
-        peak_mem
-    )
+
 
     # 3. RESULTADOS FINALES Y DESCARGA CUALITATIVA
     stats_qlora = get_top_k_stats(model_qlora, test_loader, device)
@@ -255,3 +292,6 @@ if __name__ == "__main__":
     # Descarga de ejemplo cualitativo (Punto 5 del reporte)
     # Puedes cambiar sample_idx por el número de la receta que quieras investigar
     download_top_5_with_scores(model_zs, model_qlora, test_ds, sample_idx=None)
+    generate_pca(model_zs, "Zero-Shot Baseline", test_ds, device, "pca_zero_shot.png")
+    # 2. Generar para QLoRA
+    generate_pca(model_qlora, "QLoRA Champion", test_ds, device, "pca_qlora.png")
