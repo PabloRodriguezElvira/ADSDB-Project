@@ -11,20 +11,18 @@ from src.common.minio_client import get_minio_client
 import src.common.global_variables as config
 from src.common.progress_bar import ProgressBar
 
-from src.multi_modal_tasks.multi_modality_task import find_similar_cross_modality 
+from src.multi_modal_tasks.multi_modality_task import find_similar_cross_modality
 
 BASE_DIR = Path(__file__).resolve().parents[2]
 
-# ------------------- CONFIG -------------------
-N_TEXTS = 1000          # how many texts we process
-K_CANDIDATES = 100      # how many images are candidates of pairing with a text
+N_TEXTS = 1000
+K_CANDIDATES = 100
 LOCAL_OUTPUT = BASE_DIR / "data" / "text_image_matches.json"
-MINIO_OUTPUT_KEY = f"{config.FINE_TUNING_PATH}text_image_matches.json"  # upload to MinIO
+MINIO_OUTPUT_KEY = f"{config.FINE_TUNING_PATH}text_image_matches.json"
 
-
-# ------------------- READ FROM MINIO -------------------
 
 def load_trusted_recipes_texts(n_texts: int) -> List[str]:
+    """Load trusted recipe texts from MinIO."""
     client = get_minio_client()
 
     key = f"{config.TRUSTED_TEXT_PATH}{config.JSON_NAME}"
@@ -44,7 +42,8 @@ def load_trusted_recipes_texts(n_texts: int) -> List[str]:
 
         raw = b"".join(chunks)
 
-        obj.close(); obj.release_conn()
+        obj.close()
+        obj.release_conn()
     except S3Error as e:
         raise RuntimeError(f"Error reading {key} from MinIO: {e}")
 
@@ -63,9 +62,8 @@ def load_trusted_recipes_texts(n_texts: int) -> List[str]:
     return texts[:n_texts]
 
 
-# ------------------- IMÁGENES TRUSTED -------------------
-
 def build_trusted_image_key(image_id: str) -> str:
+    """Build a trusted image key from an image id."""
     name = os.path.basename(image_id)
 
     if not any(name.lower().endswith(ext) for ext in config.IMAGE_EXTENSIONS):
@@ -79,33 +77,23 @@ def get_trusted_image_as_base64(
     image_id: str,
     metadata: Dict[str, Any] | None = None,
 ) -> str:
-    """
-    Lee la imagen desde el bucket TRUSTED y devuelve su contenido en base64
-    sin moverla a ningún otro bucket.
-    """
+    """Read a trusted image and return it as base64 text."""
     src_bucket = config.TRUSTED_BUCKET
     src_key = (metadata or {}).get("source_key") or build_trusted_image_key(image_id)
 
     obj = client.get_object(src_bucket, src_key)
     data = obj.read()
-    obj.close(); obj.release_conn()
+    obj.close()
+    obj.release_conn()
 
-    # codificar a base64 (string UTF-8)
     return base64.b64encode(data).decode("utf-8")
 
-
-# ------------------- MATCH TEXTO - IMAGEN -------------------
 
 def match_texts_to_unique_images(
     save_local: bool = True,
     save_to_minio: bool = False,
 ) -> List[Dict[str, Any]]:
-    """
-    - Empareja los primeros N_TEXT textos (trusted) con imágenes únicas (trusted/images).
-    - Para cada texto se escoge 1 imagen distinta (sin reutilizar).
-    - NO se mueve la imagen; se guarda su contenido en base64 en el JSON de matches.
-    - Si no se puede encontrar una imagen única para algún texto => lanza error.
-    """
+    """Match trusted texts to unique images and persist the matches."""
     texts = load_trusted_recipes_texts(N_TEXTS)
     total_texts = len(texts)
     print(f"Number of texts to process: {total_texts}")
@@ -123,11 +111,10 @@ def match_texts_to_unique_images(
         for idx, text in enumerate(texts):
             text_clean = text.strip()
             if not text_clean:
-                progress.write(f"[WARN] Texto vacío en índice={idx}, se salta.")
+                progress.write(f"[WARN] Texto vacÇðo en Çðndice={idx}, se salta.")
                 progress.update(1)
                 continue
 
-            # 1) CLIP: texto -> imágenes candidatas
             results = find_similar_cross_modality(
                 text_clean,
                 relation="text-image",
@@ -142,7 +129,6 @@ def match_texts_to_unique_images(
             chosen_distance = None
             chosen_metadata = None
 
-            # 2) elegir la primera candidata que NO esté usada
             for img_id, dist, meta in zip(image_ids, distances, metadatas):
                 if img_id not in used_image_ids:
                     chosen_image_id = img_id
@@ -150,16 +136,14 @@ def match_texts_to_unique_images(
                     chosen_metadata = meta
                     break
 
-            # si no hay ninguna imagen nueva disponible, no podemos mantener 1:1
             if chosen_image_id is None:
                 raise RuntimeError(
-                    f"No hay imagen única disponible para el texto índice {idx}. "
-                    f"Hay {len(used_image_ids)} imágenes distintas usadas hasta ahora."
+                    f"No hay imagen Ç§nica disponible para el texto Çðndice {idx}. "
+                    f"Hay {len(used_image_ids)} imÇ­genes distintas usadas hasta ahora."
                 )
 
             used_image_ids.add(chosen_image_id)
 
-            # 3) obtener la imagen en base64 desde el bucket TRUSTED
             image_base64 = get_trusted_image_as_base64(
                 client,
                 chosen_image_id,
@@ -178,13 +162,11 @@ def match_texts_to_unique_images(
             )
             progress.update(1)
 
-    # 4) sanity check: 1 imagen por texto
     if len(matches) != len(texts):
         raise RuntimeError(
             f"Matches incompletos: {len(matches)} matches para {len(texts)} textos."
         )
 
-    # 5) guardar JSON
     if save_local:
         LOCAL_OUTPUT.parent.mkdir(parents=True, exist_ok=True)
         with LOCAL_OUTPUT.open("w", encoding="utf-8") as f:

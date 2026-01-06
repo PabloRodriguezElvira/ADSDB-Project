@@ -14,29 +14,24 @@ from src.common.progress_bar import ProgressBar
 
 BASE_DIR = Path(__file__).resolve().parents[2]
 
-# ------------------- CONFIG -------------------
-
-# JSON de matches original (generado por tu script actual)
 INPUT_BUCKET = config.FINE_TUNING_BUCKET
 INPUT_MATCHES_KEY = f"{config.FINE_TUNING_PATH}text_image_matches.json"
 
-# Salida (un único JSON) en MinIO y local
 AUGMENTED_JSON_KEY = f"{config.AUGMENTATION_PATH}augmented_text_image_matches.json"
 LOCAL_AUGMENTED_JSON = BASE_DIR / "data" / "augmented_text_image_matches.json"
 
-# Número de augmentations por par texto-imagen
 N_AUG_PER_SAMPLE = 1
 
 
-# ------------------- UTILIDADES BASE64/IMAGEN -------------------
-
 def _base64_to_image(b64_str: str) -> Image.Image:
+    """Decode a base64 string into an RGB image."""
     data = base64.b64decode(b64_str.encode("utf-8"))
     img = Image.open(io.BytesIO(data)).convert("RGB")
     return img
 
 
 def _image_to_base64(img: Image.Image) -> str:
+    """Encode an RGB image as a base64 PNG string."""
     buf = io.BytesIO()
     img.save(buf, format="PNG")
     buf.seek(0)
@@ -44,42 +39,31 @@ def _image_to_base64(img: Image.Image) -> str:
 
 
 def _random_image_augmentation(img: Image.Image) -> tuple[Image.Image, dict]:
-    """
-    Augmentation para CLIP:
-      - random crop ligero
-      - rotación aleatoria [-15, 15]
-      - flip horizontal opcional
-      - cambios pequeños de brillo, contraste y color
-    """
+    """Apply mild crop/rotation/flip/color jitter and return metadata."""
     aug = img.copy()
     w, h = aug.size
 
-    # ----- Random crop ligero (90–100% del tamaño original) -----
     scale = random.uniform(0.9, 1.0)
     new_w = int(w * scale)
     new_h = int(h * scale)
-    left   = random.randint(0, w - new_w)
-    top    = random.randint(0, h - new_h)
-    right  = left + new_w
+    left = random.randint(0, w - new_w)
+    top = random.randint(0, h - new_h)
+    right = left + new_w
     bottom = top + new_h
     aug = aug.crop((left, top, right, bottom))
-    # Opcional: reescalar de nuevo al tamaño original
     aug = aug.resize((w, h), Image.BICUBIC)
 
-    # ----- Rotación -----
     angle = random.uniform(-15, 15)
     aug = aug.rotate(angle, resample=Image.BICUBIC, expand=False)
 
-    # ----- Flip horizontal -----
     hflip = False
     if random.random() < 0.5:
         aug = ImageOps.mirror(aug)
         hflip = True
 
-    # ----- Color jitter -----
     brightness_factor = random.uniform(0.8, 1.2)
-    contrast_factor   = random.uniform(0.8, 1.2)
-    color_factor      = random.uniform(0.8, 1.2)
+    contrast_factor = random.uniform(0.8, 1.2)
+    color_factor = random.uniform(0.8, 1.2)
 
     aug = ImageEnhance.Brightness(aug).enhance(brightness_factor)
     aug = ImageEnhance.Contrast(aug).enhance(contrast_factor)
@@ -97,25 +81,20 @@ def _random_image_augmentation(img: Image.Image) -> tuple[Image.Image, dict]:
     return aug, meta
 
 
-# ------------------- (OPCIONAL) AUGMENTACIÓN DE TEXTO -------------------
-
 def augment_text(text: str, aug_idx: int) -> str:
-    """
-    Hook para augmentación de texto.
-    Ahora mismo devuelve el mismo texto.
-    """
+    """Hook for future text augmentation; currently returns input."""
     return text
 
 
-# ------------------- LECTURA DEL JSON ORIGINAL -------------------
-
 def load_matches_from_minio() -> List[Dict[str, Any]]:
+    """Load the original matches list from MinIO."""
     client = get_minio_client()
 
     try:
         obj = client.get_object(INPUT_BUCKET, INPUT_MATCHES_KEY)
         raw = obj.read()
-        obj.close(); obj.release_conn()
+        obj.close()
+        obj.release_conn()
     except S3Error as e:
         raise RuntimeError(
             f"Error leyendo JSON de matches {INPUT_BUCKET}/{INPUT_MATCHES_KEY}: {e}"
@@ -129,26 +108,17 @@ def load_matches_from_minio() -> List[Dict[str, Any]]:
     return matches
 
 
-# ------------------- PIPELINE PRINCIPAL -------------------
 def augment_dataset(
     n_aug_per_sample: int = N_AUG_PER_SAMPLE,
     save_local: bool = False,
     save_to_minio: bool = True,
 ) -> List[Dict[str, Any]]:
-    """
-    - Lee `text_image_matches.json` (con `image_base64`) desde MinIO.
-    - Construye un dataset con:
-        * todas las muestras ORIGINALES
-        * y n_aug_per_sample augmentations por cada una
-      => tamaño total = num_original * (1 + n_aug_per_sample)
-    - Genera un único JSON con todas las muestras (sin split).
-    """
+    """Build an augmented dataset and optionally persist it."""
     original_matches = load_matches_from_minio()
     num_original = len(original_matches)
 
     all_samples: List[Dict[str, Any]] = []
 
-    # 1) Construir dataset (original + augmentations)
     with ProgressBar(
         total=num_original,
         description="Generando JSON con originales + augmentations",
@@ -157,7 +127,7 @@ def augment_dataset(
     ) as progress:
         for i, match in enumerate(original_matches):
             text = match.get("text", "")
-            text_index = match.get("text_index", i)  # fallback a i si no está
+            text_index = match.get("text_index", i)
             image_base64 = match.get("image_base64")
 
             if not image_base64:
@@ -167,25 +137,20 @@ def augment_dataset(
                 progress.update(1)
                 continue
 
-            # --------- Entrada ORIGINAL ---------
             original_entry = {
                 "original_index": i,
                 "original_text_index": text_index,
                 "original_image_id": match.get("image_id"),
-
                 "text": text,
                 "image_base64": image_base64,
-
                 "image_metadata": match.get("image_metadata"),
                 "distance": match.get("distance"),
-
                 "is_augmented": False,
                 "augmentation_index": None,
                 "augmentation_metadata": None,
             }
             all_samples.append(original_entry)
 
-            # --------- Augmentations ---------
             try:
                 img = _base64_to_image(image_base64)
             except Exception as e:
@@ -204,13 +169,10 @@ def augment_dataset(
                     "original_index": i,
                     "original_text_index": text_index,
                     "original_image_id": match.get("image_id"),
-
                     "text": aug_text,
                     "image_base64": aug_b64,
-
                     "image_metadata": match.get("image_metadata"),
                     "distance": match.get("distance"),
-
                     "is_augmented": True,
                     "augmentation_index": aug_idx,
                     "augmentation_metadata": aug_meta,
@@ -219,7 +181,6 @@ def augment_dataset(
 
             progress.update(1)
 
-    # 2) Guardar local
     if save_local:
         LOCAL_AUGMENTED_JSON.parent.mkdir(parents=True, exist_ok=True)
 
@@ -227,7 +188,6 @@ def augment_dataset(
             json.dump(all_samples, f, ensure_ascii=False, indent=2)
         print(f"JSON guardado en local: {LOCAL_AUGMENTED_JSON}")
 
-    # 3) Guardar en MinIO
     if save_to_minio:
         client = get_minio_client()
         try:

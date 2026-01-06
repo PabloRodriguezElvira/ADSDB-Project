@@ -10,19 +10,14 @@ from src.common.minio_client import get_minio_client
 import src.common.global_variables as config
 from src.common.progress_bar import ProgressBar
 
-# ------------------- CONFIG -------------------
-
-# Fuente: JSON de augmentation
 INPUT_BUCKET = config.AUGMENTATION_BUCKET
 INPUT_KEY = f"{config.AUGMENTATION_PATH}augmented_text_image_matches.json"
 
-# Fuente: splits (indices)
 SPLIT_BUCKET = config.SPLIT_BUCKET
 TRAIN_KEY = f"{config.SPLIT_PATH}train.txt"
 TEST_KEY = f"{config.SPLIT_PATH}test.txt"
 DEV_KEY = f"{config.SPLIT_PATH}dev.txt"
 
-# Destino: training dataset
 OUTPUT_BUCKET = config.TRAINING_DATASET_BUCKET
 TRAIN_PREFIX = config.TRAINING_TRAIN
 TEST_PREFIX = config.TRAINING_TEST
@@ -30,11 +25,13 @@ DEV_PREFIX = config.TRAINING_DEV
 
 
 def load_augmented_samples() -> List[Dict[str, Any]]:
+    """Load augmented samples from MinIO."""
     client = get_minio_client()
     try:
         obj = client.get_object(INPUT_BUCKET, INPUT_KEY)
         raw = obj.read()
-        obj.close(); obj.release_conn()
+        obj.close()
+        obj.release_conn()
     except S3Error as e:
         raise RuntimeError(
             f"Error leyendo JSON de augmentation {INPUT_BUCKET}/{INPUT_KEY}: {e}"
@@ -49,11 +46,13 @@ def load_augmented_samples() -> List[Dict[str, Any]]:
 
 
 def load_split_indices(key: str) -> List[int]:
+    """Load split indices from a MinIO text file."""
     client = get_minio_client()
     try:
         obj = client.get_object(SPLIT_BUCKET, key)
         raw = obj.read()
-        obj.close(); obj.release_conn()
+        obj.close()
+        obj.release_conn()
     except S3Error as e:
         raise RuntimeError(f"Error leyendo split {SPLIT_BUCKET}/{key}: {e}")
 
@@ -70,6 +69,7 @@ def load_split_indices(key: str) -> List[int]:
 
 
 def _decode_base64_to_png(image_base64: str) -> bytes:
+    """Decode base64 data and return PNG bytes."""
     try:
         raw = base64.b64decode(image_base64)
     except Exception as e:
@@ -92,6 +92,7 @@ def _export_split(
     samples: List[Dict[str, Any]],
     client,
 ) -> List[Dict[str, Any]]:
+    """Export images and matches for a split to MinIO."""
     matches: List[Dict[str, Any]] = []
     images_prefix = f"{split_prefix}images/"
 
@@ -166,6 +167,7 @@ def _export_split(
 
 
 def build_training_dataset() -> Dict[str, int]:
+    """Create train/test/dev splits in MinIO and return sizes."""
     samples = load_augmented_samples()
     train_idx = load_split_indices(TRAIN_KEY)
     test_idx = load_split_indices(TEST_KEY)

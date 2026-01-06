@@ -8,11 +8,9 @@ from minio.error import S3Error
 from src.common.minio_client import get_minio_client
 import src.common.global_variables as config
 
-# Fuente: JSON completo generado en augmentation_zone.py
 INPUT_BUCKET = config.AUGMENTATION_BUCKET
 INPUT_KEY = f"{config.AUGMENTATION_PATH}augmented_text_image_matches.json"
 
-# Destino: índices de cada split en texto plano
 OUTPUT_BUCKET = config.SPLIT_BUCKET
 TRAIN_KEY = f"{config.SPLIT_PATH}train.txt"
 TEST_KEY = f"{config.SPLIT_PATH}test.txt"
@@ -20,11 +18,13 @@ DEV_KEY = f"{config.SPLIT_PATH}dev.txt"
 
 
 def load_augmented_samples() -> List[dict]:
+    """Load augmented samples from MinIO."""
     client = get_minio_client()
     try:
         obj = client.get_object(INPUT_BUCKET, INPUT_KEY)
         raw = obj.read()
-        obj.close(); obj.release_conn()
+        obj.close()
+        obj.release_conn()
     except S3Error as e:
         raise RuntimeError(
             f"Error leyendo JSON de augmentation {INPUT_BUCKET}/{INPUT_KEY}: {e}"
@@ -44,7 +44,7 @@ def split_indices(
     test_ratio: float = 0.1,
     seed: int = 42,
 ) -> Tuple[List[int], List[int], List[int]]:
-    """Devuelve listas de índices para train/test/dev con seed fija."""
+    """Return train/test/dev index lists using a fixed seed."""
     if num_samples <= 0:
         return [], [], []
 
@@ -56,13 +56,14 @@ def split_indices(
     n_test = int(num_samples * test_ratio)
 
     train_idx = all_indices[:n_train]
-    test_idx = all_indices[n_train:n_train + n_test]
-    dev_idx = all_indices[n_train + n_test:]
+    test_idx = all_indices[n_train : n_train + n_test]
+    dev_idx = all_indices[n_train + n_test :]
 
     return train_idx, test_idx, dev_idx
 
 
 def _save_indices_to_minio(key: str, indices: List[int]) -> None:
+    """Write a list of indices to MinIO as a text file."""
     client = get_minio_client()
     payload = "\n".join(str(i) for i in indices).encode("utf-8")
     try:
@@ -82,6 +83,7 @@ def split_augmented_json(
     test_ratio: float = 0.1,
     seed: int = 42,
 ) -> Tuple[List[int], List[int], List[int]]:
+    """Split augmented samples and persist index lists to MinIO."""
     samples = load_augmented_samples()
     train_idx, test_idx, dev_idx = split_indices(
         len(samples),
