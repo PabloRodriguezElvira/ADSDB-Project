@@ -116,7 +116,7 @@ def download_top_5_with_scores(model_zs, model_qlora, dataset, sample_idx=None):
     ) as f:
         f.writelines(report_zs + ["\n" + "-" * 30 + "\n"] + report_ql)
 
-    print(f"\n>>> Ç%xito. Resultados guardados en: {base_folder}")
+    print(f"\n>>> Saved in: {base_folder}")
 
 
 def get_top_k_stats(model, dataloader, device):
