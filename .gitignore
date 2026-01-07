@@ -19,3 +19,7 @@ data/
 
 # Carpeta de embeddings
 embeddings/
+
+# Model training
+final_test_run
+trainer_output
